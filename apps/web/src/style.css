@@ -65,19 +65,21 @@ aside {
 }
 .brand {
   font-family: "Avenir Next", Avenir, sans-serif;
-  font-size: 27px;
-  letter-spacing: -1.3px;
+  font-size: 20px;
+  line-height: 1.05;
+  letter-spacing: -0.8px;
   font-weight: 800;
   display: flex;
   align-items: center;
   text-decoration: none;
 }
 .brand-icon {
-  font-size: 30px;
+  font-size: 28px;
   margin-right: 10px;
+  flex: 0 0 auto;
 }
-.brand-dot {
-  color: #88a464;
+.brand-wordmark {
+  max-width: 145px;
 }
 .eyebrow {
   font-size: 10px;
@@ -561,6 +563,110 @@ pre {
   margin-top: 6px;
   color: var(--muted);
 }
+.about-header {
+  max-width: 850px;
+}
+.about-header p {
+  max-width: 720px;
+  font-size: 16px;
+  line-height: 1.7;
+}
+.about-intro {
+  border-color: #d9e2d2;
+  background: #f1f5eb;
+}
+.about-statement {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 28px;
+  align-items: center;
+  padding: 34px 38px;
+}
+.about-statement p {
+  max-width: 900px;
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.55;
+  letter-spacing: -0.25px;
+}
+.about-mark {
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  border: 1px solid #cedbc3;
+  border-radius: 50%;
+  background: #e5eddd;
+  color: var(--green);
+  font-size: 27px;
+}
+.about-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.about-section {
+  padding: 30px;
+}
+.about-section > h2 {
+  margin: 10px 0 26px;
+  font-size: 23px;
+  letter-spacing: -0.6px;
+}
+.about-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.about-steps li {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 14px;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+}
+.about-steps li > span {
+  padding-top: 1px;
+  color: #8da270;
+  font-size: 11px;
+  letter-spacing: 1px;
+  font-weight: 700;
+}
+.about-steps h3,
+.principle-list h3 {
+  font-size: 15px;
+}
+.about-steps p,
+.principle-list p,
+.about-note p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.65;
+}
+.principle-list article {
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+}
+.about-note {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 28px;
+  align-items: baseline;
+  margin: 10px 0 48px;
+  padding: 24px 4px 0;
+  border-top: 1px solid var(--line);
+}
+.about-note > span {
+  color: #819073;
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  font-weight: 700;
+}
+.about-note p {
+  max-width: 720px;
+  margin: 0;
+}
 .scope-manager {
   margin: 25px 0 60px;
 }
@@ -716,7 +822,8 @@ footer {
     padding: 0 25px;
   }
   .columns,
-  .detail-columns {
+  .detail-columns,
+  .about-grid {
     grid-template-columns: 1fr;
   }
   .table-head,
@@ -737,7 +844,10 @@ footer {
     border-bottom: 1px solid var(--line);
   }
   .brand {
-    font-size: 23px;
+    font-size: 20px;
+  }
+  .brand-wordmark {
+    max-width: none;
   }
   .side-label,
   .side-bottom {
@@ -745,6 +855,7 @@ footer {
   }
   nav {
     display: flex;
+    flex-wrap: wrap;
     margin-top: 15px;
     gap: 3px;
   }
@@ -797,5 +908,20 @@ footer {
   }
   .empty {
     padding: 45px 15px;
+  }
+  .about-statement {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 26px 22px;
+  }
+  .about-statement p {
+    font-size: 18px;
+  }
+  .about-section {
+    padding: 22px;
+  }
+  .about-note {
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
 }

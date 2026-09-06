@@ -1,4 +1,4 @@
-# Fieldnotes — Remote Viewing Bench
+# Remote Viewing Bench
 
 A local, single-user workbench for versioned remote-viewing experiments. Node/TypeScript + Fastify, React/Vite, SQLite, OpenRouter inference, and LangSmith tracing.
 
