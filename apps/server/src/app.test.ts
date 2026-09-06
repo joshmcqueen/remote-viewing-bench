@@ -1,0 +1,334 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { loadEnv } from "./config.js";
+import { openDb } from "./db.js";
+import { buildApp } from "./app.js";
+import type { Inference } from "./inference.js";
+const models = [
+  {
+    id: "test/one",
+    name: "One",
+    supported_parameters: ["structured_outputs"],
+    architecture: { input_modalities: ["text", "image"] },
+  },
+  {
+    id: "test/two",
+    name: "Two",
+    supported_parameters: [],
+    architecture: { input_modalities: ["text"] },
+  },
+];
+const score = {
+  score: 5,
+  rationale: "Distinctive matches with errors",
+  observations: [
+    {
+      attribute: "color",
+      verdict: "match",
+      responseEvidence: "red",
+      targetEvidence: "red",
+      explanation: "Direct match",
+    },
+  ],
+};
+const response = (content: string) => ({
+  choices: [{ message: { content }, finish_reason: "stop" }],
+});
+const png =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jH7sAAAAASUVORK5CYII=";
+async function fixture(
+  infer: Inference = async (p) => ({
+    response: response(
+      p.response_format ? JSON.stringify(score) : "red round smooth",
+    ),
+  }),
+  configured = true,
+) {
+  const db = openDb(":memory:");
+  const app = buildApp(db, infer, {
+    configured,
+    tracing: true,
+    traceConfigured: true,
+    fetchModels: async () => models,
+  });
+  const call = async (url: string, body?: any, method?: any) => {
+    const r = await app.inject({
+      url: "/api" + url,
+      method: method || (body === undefined ? "GET" : "POST"),
+      payload: body,
+    });
+    return { status: r.statusCode, data: r.json() };
+  };
+  await call("/models/refresh", {});
+  const ps = (await call("/prompts")).data;
+  const input = {
+    code: "RV-001",
+    scope: "physical",
+    promptVersionId: ps.find((p: any) => p.kind === "experiment").versionId,
+    models: models.map((m) => m.id),
+    repetitions: 1,
+    temperature: null,
+    maxTokens: 2048,
+  };
+  const wait = async (id: number) => {
+    for (let n = 0; n < 100; n++) {
+      const r = (await call(`/runs/${id}`)).data;
+      if (r.status !== "running") return r;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    throw new Error("Timed out");
+  };
+  return {
+    db,
+    app,
+    call,
+    input,
+    ps,
+    wait,
+    close: async () => {
+      await app.close();
+      db.close();
+    },
+  };
+}
+test("full experiment, immutable prompts, identical payloads, reveal and evaluation snapshots", async () => {
+  const calls: any[] = [];
+  const f = await fixture(async (p) => {
+    calls.push(p);
+    return {
+      response: response(
+        p.response_format ? JSON.stringify(score) : "red round smooth",
+      ),
+      traceId: "trace",
+      traceUrl: "https://smith.langchain.com/trace",
+    };
+  });
+  try {
+    const id = (await f.call("/runs", f.input)).data.id;
+    let r = await f.wait(id);
+    assert.equal(r.jobs.length, 2);
+    assert.deepEqual(calls[0].messages, calls[1].messages);
+    assert.equal(calls[0].tool_choice, "none");
+    assert.deepEqual(calls[0].plugins, []);
+    assert.equal(calls[0].tools, undefined);
+    assert.equal(calls[0].temperature, undefined);
+    const p = f.ps.find((p: any) => p.kind === "experiment");
+    await f.call(`/prompts/${p.id}/versions`, {
+      name: p.name,
+      kind: p.kind,
+      content: "New instructions",
+    });
+    assert.equal(
+      (await f.call(`/runs/${id}`)).data.messages[0].content,
+      r.messages[0].content,
+    );
+    await f.call(`/runs/${id}/reveal`, {
+      description: "secret red marble",
+      image: png,
+    });
+    assert.ok(!JSON.stringify(calls.slice(0, 2)).includes("secret"));
+    assert.equal(
+      (
+        await f.call(`/runs/${id}/evaluate`, {
+          model: "test/two",
+          promptVersionId: f.ps.find((p: any) => p.kind === "evaluator")
+            .versionId,
+        })
+      ).status,
+      400,
+    );
+    const evaluation = {
+      model: "test/one",
+      promptVersionId: f.ps.find((p: any) => p.kind === "evaluator").versionId,
+    };
+    await f.call(`/runs/${id}/evaluate`, evaluation);
+    r = await f.wait(id);
+    assert.equal(r.jobs.filter((j: any) => j.result?.score === 5).length, 2);
+    assert.ok(
+      calls[2].messages[1].content[0].text.includes("secret red marble"),
+    );
+    assert.ok(!calls[2].messages[1].content[0].text.includes("test/"));
+    assert.equal(calls[2].messages[1].content[1].image_url.url, png);
+    await f.call(`/runs/${id}/reveal`, {
+      description: "corrected blue marble",
+    });
+    await f.call(`/runs/${id}/evaluate`, evaluation);
+    r = await f.wait(id);
+    assert.equal(r.batches.length, 2);
+    assert.equal(r.batches[1].reveal.description, "secret red marble");
+    assert.equal(r.batches[1].reveal.image, png);
+    assert.equal(r.batches[0].reveal.description, "corrected blue marble");
+    assert.equal(r.jobs.length, 6);
+  } finally {
+    await f.close();
+  }
+});
+test("partial failure and explicit retry append attempts; trace warnings preserve output", async () => {
+  let fail = true;
+  const f = await fixture(async (p) => {
+    if (p.model === "test/two" && fail) throw new Error("Provider unavailable");
+    return {
+      response: response("red"),
+      traceError: "Trace service unavailable",
+    };
+  });
+  try {
+    const id = (await f.call("/runs", f.input)).data.id;
+    let r = await f.wait(id);
+    assert.equal(r.status, "needs attention");
+    const failed = r.jobs.find((j: any) => j.status === "error");
+    assert.equal(r.jobs[0].status, "complete");
+    assert.equal(r.jobs[0].trace_error, "Trace service unavailable");
+    fail = false;
+    await f.call(`/jobs/${failed.id}/retry`, {});
+    r = await f.wait(id);
+    assert.equal(r.jobs.length, 3);
+    assert.equal(r.jobs[2].attempt, 2);
+    assert.equal(r.jobs[1].status, "error");
+    assert.equal((await f.call(`/jobs/${failed.id}/retry`, {})).status, 400);
+  } finally {
+    await f.close();
+  }
+});
+test("active reveal blocked; cancellation prevents pending jobs from dispatching", async () => {
+  let calls = 0;
+  const f = await fixture(async (_p, signal) => {
+    calls++;
+    return await new Promise((_resolve, reject) =>
+      signal.addEventListener("abort", () => reject(new Error("Aborted"))),
+    );
+  });
+  try {
+    const id = (await f.call("/runs", { ...f.input, repetitions: 3 })).data.id;
+    assert.equal(calls, 3);
+    assert.equal(
+      (await f.call(`/runs/${id}/reveal`, { description: "red" })).status,
+      400,
+    );
+    await f.call(`/runs/${id}/cancel`, {});
+    const r = await f.wait(id);
+    assert.ok(r.jobs.every((j: any) => j.status === "cancelled"));
+    assert.equal(calls, 3);
+    await f.call(`/runs/${id}/reveal`, { description: "red" });
+    assert.equal((await f.call(`/jobs/${r.jobs[0].id}/retry`, {})).status, 400);
+  } finally {
+    await f.close();
+  }
+});
+test("invalid scoring retained, compatible model required, evaluator retry creates attempt", async () => {
+  let valid = false;
+  const f = await fixture(async (p) => ({
+    response: response(
+      p.response_format
+        ? JSON.stringify({ ...score, score: valid ? 5 : 99 })
+        : "red",
+    ),
+  }));
+  try {
+    const id = (await f.call("/runs", { ...f.input, models: ["test/one"] }))
+      .data.id;
+    await f.wait(id);
+    await f.call(`/runs/${id}/reveal`, { description: "red" });
+    await f.call(`/runs/${id}/evaluate`, {
+      model: "test/one",
+      promptVersionId: f.ps.find((p: any) => p.kind === "evaluator").versionId,
+    });
+    let r = await f.wait(id);
+    const bad = r.jobs[1];
+    assert.equal(bad.status, "error");
+    assert.ok(bad.response);
+    valid = true;
+    await f.call(`/jobs/${bad.id}/retry`, {});
+    r = await f.wait(id);
+    assert.equal(r.jobs[2].result.score, 5);
+    assert.equal(r.jobs[1].result, null);
+  } finally {
+    await f.close();
+  }
+});
+test("restart marks queued and active work interrupted without modifying complete attempts", () => {
+  const dir = mkdtempSync(join(tmpdir(), "rv-test-"));
+  try {
+    let db = openDb(join(dir, "bench.sqlite"));
+    db.prepare(
+      "INSERT INTO runs(id,code,scope,messages,settings) VALUES(1,'x','physical','[]','{}')",
+    ).run();
+    for (const status of ["queued", "running", "complete"])
+      db.prepare(
+        "INSERT INTO jobs(run_id,kind,model,repetition,status,payload) VALUES(1,'generation','test/one',1,?,'{}')",
+      ).run(status);
+    db.close();
+    db = openDb(join(dir, "bench.sqlite"));
+    assert.deepEqual(db.prepare("SELECT status FROM jobs ORDER BY id").all(), [
+      { status: "interrupted" },
+      { status: "interrupted" },
+      { status: "complete" },
+    ]);
+    db.close();
+  } finally {
+    rmSync(dir, { recursive: true });
+  }
+});
+test("configuration missing blocks inference, settings persist, foreign origins rejected", async () => {
+  const f = await fixture(undefined, false);
+  try {
+    assert.equal((await f.call("/runs", f.input)).status, 400);
+    assert.equal((await f.call("/runs")).status, 200);
+    const c = (await f.call("/config")).data;
+    assert.deepEqual(Object.keys(c).sort(), [
+      "langsmith",
+      "openrouter",
+      "tracing",
+    ]);
+    await f.call(
+      "/settings",
+      {
+        models: ["test/one"],
+        repetitions: 2,
+        maxTokens: 3000,
+        temperature: 0.5,
+        evaluatorModel: "test/one",
+      },
+      "PUT",
+    );
+    assert.equal((await f.call("/settings")).data.repetitions, 2);
+    const bad = await f.app.inject({
+      url: "/api/config",
+      headers: { origin: "https://untrusted.example" },
+    });
+    assert.equal(bad.statusCode, 403);
+    const host = await f.app.inject({
+      url: "/api/config",
+      headers: { host: "untrusted.example" },
+    });
+    assert.equal(host.statusCode, 403);
+    assert.match(
+      readFileSync(new URL("../../../.gitignore", import.meta.url), "utf8"),
+      /^\.env$/m,
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test("root .env loads independently of cwd and preserves existing environment", () => {
+  const dir = mkdtempSync(join(tmpdir(), "rv-env-"));
+  const key = "RV_BENCH_CONFIG_TEST";
+  const previous = process.env[key];
+  try {
+    writeFileSync(join(dir, ".env"), `${key}=fixture-value\n`);
+    delete process.env[key];
+    loadEnv(dir);
+    assert.equal(process.env[key], "fixture-value");
+    process.env[key] = "existing";
+    loadEnv(dir);
+    assert.equal(process.env[key], "existing");
+  } finally {
+    if (previous === undefined) delete process.env[key];
+    else process.env[key] = previous;
+    rmSync(dir, { recursive: true });
+  }
+});

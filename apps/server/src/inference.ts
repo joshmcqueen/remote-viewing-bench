@@ -1,0 +1,114 @@
+import OpenAI from "openai";
+import { Client } from "langsmith";
+import { randomUUID } from "node:crypto";
+export type Inference = (
+  payload: any,
+  signal: AbortSignal,
+  meta: Record<string, unknown>,
+) => Promise<{
+  response: any;
+  traceId?: string;
+  traceUrl?: string;
+  traceError?: string;
+}>;
+export function createInference(
+  fetchImplementation: typeof fetch = fetch,
+): Inference {
+  const openai = new OpenAI({
+    apiKey: process.env.OPENROUTER_API_KEY || "unconfigured",
+    baseURL: "https://openrouter.ai/api/v1",
+    maxRetries: 0,
+    fetch: fetchImplementation,
+    timeout: 180000,
+  });
+  const tracing = process.env.LANGSMITH_TRACING !== "false";
+  const client =
+    tracing && process.env.LANGSMITH_API_KEY
+      ? new Client({
+          apiKey: process.env.LANGSMITH_API_KEY,
+          apiUrl: process.env.LANGSMITH_ENDPOINT,
+          autoBatchTracing: false,
+          timeout_ms: 10000,
+          callerOptions: { maxRetries: 0 },
+          fetchImplementation,
+          omitTracedRuntimeInfo: true,
+        })
+      : null;
+  return async (payload, signal, meta) => {
+    const traceId = randomUUID();
+    let traceError: string | undefined;
+    let traceUrl: string | undefined;
+    const safeError = (e: unknown) =>
+      String(e)
+        .replaceAll(
+          process.env.OPENROUTER_API_KEY || "__NO_OR_KEY__",
+          "[redacted]",
+        )
+        .replaceAll(
+          process.env.LANGSMITH_API_KEY || "__NO_LS_KEY__",
+          "[redacted]",
+        );
+    const started = Date.now();
+    if (client)
+      try {
+        await client.createRun({
+          id: traceId,
+          name:
+            meta.kind === "evaluation" ? "Evaluate response" : "Remote viewing",
+          run_type: "llm",
+          inputs: payload,
+          start_time: started,
+          project_name: process.env.LANGSMITH_PROJECT || "remote-view-bench",
+          extra: {
+            metadata: {
+              ...meta,
+              ls_provider: "openrouter",
+              ls_model_name: payload.model,
+            },
+          },
+        });
+      } catch (e) {
+        traceError = safeError(e);
+      }
+    else if (tracing) traceError = "LangSmith API key is missing";
+    let response: any;
+    try {
+      response = await openai.chat.completions.create(payload, { signal });
+    } catch (e) {
+      if (client)
+        try {
+          await client.updateRun(traceId, {
+            error: safeError(e),
+            end_time: Date.now(),
+          });
+        } catch (te) {
+          traceError = safeError(te);
+        }
+      throw Object.assign(new Error(safeError(e)), {
+        traceId: tracing ? traceId : undefined,
+        traceError,
+      });
+    }
+    if (client)
+      try {
+        await client.updateRun(traceId, {
+          outputs: response,
+          end_time: Date.now(),
+        });
+        traceUrl = await client.getRunUrl({
+          runId: traceId,
+          projectOpts: {
+            projectName: process.env.LANGSMITH_PROJECT || "remote-view-bench",
+          },
+        });
+      } catch (e) {
+        traceError = safeError(e);
+      }
+    return {
+      response,
+      traceId: tracing ? traceId : undefined,
+      traceUrl,
+      traceError,
+    };
+  };
+}

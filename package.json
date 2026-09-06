@@ -1,0 +1,23 @@
+{
+  "name": "remote-view-bench",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "scripts": {
+    "dev": "concurrently -k 'pnpm --filter server dev' 'pnpm --filter web dev'",
+    "build": "pnpm -r build",
+    "start": "pnpm --filter server start",
+    "test": "pnpm --filter @rv/shared build && pnpm --filter server test",
+    "typecheck": "pnpm --filter @rv/shared build && pnpm -r typecheck",
+    "format": "prettier --write apps packages *.json README.md"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "concurrently": "^9.2.1",
+    "prettier": "^3.9.6",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
