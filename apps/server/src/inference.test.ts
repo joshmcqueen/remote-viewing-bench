@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createInference } from "./inference.js";
-test("OpenRouter and LangSmith SDK integration keeps credentials out of trace bodies", async () => {
+test("OpenRouter and SmithDB LangSmith integration records useful trace context securely", async () => {
   const saved = { ...process.env };
-  const requests: { url: string; body: string }[] = [];
+  const requests: { url: string; method: string; body: string }[] = [];
   process.env.OPENROUTER_API_KEY = "or-test-secret";
   process.env.LANGSMITH_API_KEY = "ls-test-secret";
   process.env.LANGSMITH_TRACING = "true";
@@ -13,7 +13,7 @@ test("OpenRouter and LangSmith SDK integration keeps credentials out of trace bo
     const fakeFetch: typeof fetch = async (input, init) => {
       const url = String(input);
       const body = init?.body ? await new Response(init.body).text() : "";
-      requests.push({ url, body });
+      requests.push({ url, method: init?.method || "GET", body });
       const headers = { "Content-Type": "application/json" };
       if (url.includes("openrouter.ai"))
         return new Response(
@@ -39,10 +39,12 @@ test("OpenRouter and LangSmith SDK integration keeps credentials out of trace bo
           ]),
           { headers },
         );
-      return new Response(
-        JSON.stringify({ app_path: "/o/fixture/projects/p/fixture/r/test" }),
-        { headers },
-      );
+      if (url.includes("/api/v2/runs/") && url.includes("/url?"))
+        return new Response(
+          JSON.stringify({ url: "https://smith.langchain.com/r/test" }),
+          { headers },
+        );
+      return new Response(JSON.stringify({}), { headers });
     };
     const out = await createInference(fakeFetch)(
       {
@@ -52,7 +54,13 @@ test("OpenRouter and LangSmith SDK integration keeps credentials out of trace bo
         plugins: [],
       },
       new AbortController().signal,
-      { kind: "generation", run_id: 1 },
+      {
+        kind: "generation",
+        run_id: 1,
+        job_id: 2,
+        target_id: "RV-001",
+        target_scope: "Physical object",
+      },
     );
     assert.equal(out.response.choices[0].message.content, "red sphere");
     assert.ok(out.traceId);
@@ -64,6 +72,25 @@ test("OpenRouter and LangSmith SDK integration keeps credentials out of trace bo
     assert.ok(traces.length >= 2);
     assert.ok(traces.some((r) => r.body.includes("Envelope 001")));
     assert.ok(traces.some((r) => r.body.includes("red sphere")));
+    assert.ok(traces.some((r) => r.body.includes("RV-001 · Remote viewing")));
+    assert.ok(traces.some((r) => r.body.includes('"target_id":"RV-001"')));
+    const urlRequest = requests.find((r) =>
+      r.url.includes(`/api/v2/runs/${out.traceId}/url?`),
+    );
+    assert.ok(urlRequest);
+    const url = new URL(urlRequest.url);
+    assert.equal(
+      url.searchParams.get("project_id"),
+      "11111111-1111-4111-8111-111111111111",
+    );
+    assert.equal(url.searchParams.get("trace_id"), out.traceId);
+    assert.ok(url.searchParams.get("start_time"));
+    assert.ok(
+      !requests.some(
+        (r) =>
+          r.method === "GET" && r.url.includes(`/api/v1/runs/${out.traceId}`),
+      ),
+    );
     for (const r of traces) {
       assert.ok(!r.body.includes("or-test-secret"));
       assert.ok(!r.body.includes("ls-test-secret"));

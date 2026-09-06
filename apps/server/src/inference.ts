@@ -34,6 +34,19 @@ export function createInference(
           omitTracedRuntimeInfo: true,
         })
       : null;
+  const projectName = process.env.LANGSMITH_PROJECT || "remote-view-bench";
+  let projectIdPromise: Promise<string> | undefined;
+  const getProjectId = () => {
+    if (!client) throw new Error("LangSmith client is not configured");
+    projectIdPromise ??= client
+      .readProject({ projectName })
+      .then((project) => project.id)
+      .catch((error) => {
+        projectIdPromise = undefined;
+        throw error;
+      });
+    return projectIdPromise;
+  };
   return async (payload, signal, meta) => {
     const traceId = randomUUID();
     let traceError: string | undefined;
@@ -49,16 +62,21 @@ export function createInference(
           "[redacted]",
         );
     const started = Date.now();
+    const kindName =
+      meta.kind === "evaluation" ? "Evaluate response" : "Remote viewing";
+    const targetId =
+      typeof meta.target_id === "string" && meta.target_id.trim()
+        ? meta.target_id.trim()
+        : undefined;
     if (client)
       try {
         await client.createRun({
           id: traceId,
-          name:
-            meta.kind === "evaluation" ? "Evaluate response" : "Remote viewing",
+          name: targetId ? `${targetId} · ${kindName}` : kindName,
           run_type: "llm",
           inputs: payload,
           start_time: started,
-          project_name: process.env.LANGSMITH_PROJECT || "remote-view-bench",
+          project_name: projectName,
           extra: {
             metadata: {
               ...meta,
@@ -95,12 +113,13 @@ export function createInference(
           outputs: response,
           end_time: Date.now(),
         });
-        traceUrl = await client.getRunUrl({
-          runId: traceId,
-          projectOpts: {
-            projectName: process.env.LANGSMITH_PROJECT || "remote-view-bench",
-          },
+        const url = await client.runs.getURL(traceId, {
+          project_id: await getProjectId(),
+          trace_id: traceId,
+          start_time: new Date(started).toISOString(),
         });
+        traceUrl = url.url;
+        if (!traceUrl) throw new Error("LangSmith returned no trace URL");
       } catch (e) {
         traceError = safeError(e);
       }

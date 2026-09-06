@@ -235,8 +235,10 @@ test("project scopes can be added, edited, renamed, and deleted", async () => {
 });
 test("full experiment, immutable prompts, identical payloads, reveal and evaluation snapshots", async () => {
   const calls: any[] = [];
-  const f = await fixture(async (p) => {
+  const traceMetadata: Record<string, unknown>[] = [];
+  const f = await fixture(async (p, _signal, meta) => {
     calls.push(p);
+    traceMetadata.push(meta);
     return {
       response: response(
         p.response_format ? JSON.stringify(score) : "red round smooth",
@@ -262,6 +264,24 @@ test("full experiment, immutable prompts, identical payloads, reveal and evaluat
     assert.deepEqual(calls[0].plugins, []);
     assert.equal(calls[0].tools, undefined);
     assert.equal(calls[0].temperature, undefined);
+    assert.deepEqual(
+      {
+        target_id: traceMetadata[0].target_id,
+        target_scope: traceMetadata[0].target_scope,
+        run_id: traceMetadata[0].run_id,
+        job_id: traceMetadata[0].job_id,
+        kind: traceMetadata[0].kind,
+        attempt: traceMetadata[0].attempt,
+      },
+      {
+        target_id: "RV-001",
+        target_scope: "Physical object",
+        run_id: id,
+        job_id: 1,
+        kind: "generation",
+        attempt: 1,
+      },
+    );
     const p = f.ps.find((p: any) => p.kind === "experiment");
     await f.call(`/prompts/${p.id}/versions`, {
       name: p.name,
@@ -308,6 +328,10 @@ test("full experiment, immutable prompts, identical payloads, reveal and evaluat
     );
     assert.ok(!calls[2].messages[1].content[0].text.includes("test/"));
     assert.equal(calls[2].messages[1].content[1].image_url.url, png);
+    assert.equal(traceMetadata[2].target_id, "RV-001");
+    assert.equal(traceMetadata[2].kind, "evaluation");
+    assert.equal(traceMetadata[2].batch_id, 1);
+    assert.equal(traceMetadata[2].source_job_id, 1);
     await f.call(`/runs/${id}/reveal`, {
       description: "corrected blue marble",
     });

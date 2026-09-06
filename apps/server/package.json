@@ -10,17 +10,17 @@
     "test": "node --import tsx --test src/*.test.ts"
   },
   "dependencies": {
-    "@rv/shared": "workspace:*",
-    "fastify": "^5.7.0",
     "@fastify/static": "^8.3.0",
+    "@rv/shared": "workspace:*",
     "better-sqlite3": "^12.6.0",
     "dotenv": "^17.2.3",
+    "fastify": "^5.7.0",
+    "langsmith": "^0.9.0",
     "openai": "^6.16.0",
-    "langsmith": "^0.4.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "tsx": "^4.21.0",
-    "@types/better-sqlite3": "^7.6.13"
+    "@types/better-sqlite3": "^7.6.13",
+    "tsx": "^4.21.0"
   }
 }

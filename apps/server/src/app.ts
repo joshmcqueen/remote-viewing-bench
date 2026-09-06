@@ -166,9 +166,14 @@ export function buildApp(
       const out = await infer(JSON.parse(j.payload), controller.signal, {
         run_id: j.run_id,
         job_id: j.id,
+        target_id: r.code,
+        target_scope: r.scope_name,
         kind: j.kind,
         model: j.model,
         repetition: j.repetition,
+        attempt: j.attempt,
+        batch_id: j.batch_id ?? undefined,
+        source_job_id: j.source_id ?? undefined,
         prompt_version_id: batch?.prompt_version_id ?? r.prompt_version_id,
       });
       db.prepare(
