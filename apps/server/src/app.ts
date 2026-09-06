@@ -14,6 +14,7 @@ import {
   type Model,
 } from "@rv/shared";
 import type { DB } from "./db.js";
+import { seedPrompts } from "./db.js";
 import type { Inference } from "./inference.js";
 const active = "('queued','running')";
 export function buildApp(
@@ -310,6 +311,18 @@ export function buildApp(
     all(
       "SELECT p.*,v.id versionId,v.version,v.system_content systemContent,v.user_content userContent,v.created_at FROM prompts p JOIN versions v ON p.id=v.prompt_id ORDER BY p.id,v.version DESC",
     ),
+  );
+  app.post("/api/prompts/reseed", async () =>
+    db.transaction(() => {
+      // Runs retain their immutable message/job snapshots, but no longer point
+      // at prompt versions that are deliberately being removed.
+      db.prepare("UPDATE runs SET prompt_version_id=NULL").run();
+      db.prepare("UPDATE batches SET prompt_version_id=NULL").run();
+      db.prepare("DELETE FROM versions").run();
+      db.prepare("DELETE FROM prompts").run();
+      seedPrompts(db);
+      return { ok: true };
+    })(),
   );
   app.get("/api/scopes", async () =>
     all("SELECT * FROM scopes ORDER BY name COLLATE NOCASE"),

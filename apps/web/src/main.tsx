@@ -60,6 +60,7 @@ function App() {
     [promptId, setPromptId] = useState(0);
   const [editing, setEditing] = useState<any>(null),
     [editingScope, setEditingScope] = useState<any>(null),
+    [historyPromptId, setHistoryPromptId] = useState<number | null>(null),
     [description, setDescription] = useState(""),
     [image, setImage] = useState<string | null>(null),
     [evalPrompt, setEvalPrompt] = useState(0),
@@ -199,8 +200,12 @@ function App() {
       setError((e as Error).message);
     }
   }
-  const experiments = prompts.filter((p) => p.kind === "experiment"),
-    evaluators = prompts.filter((p) => p.kind === "evaluator");
+  const latestPrompts = prompts.filter(
+    (prompt, index) =>
+      prompts.findIndex((item) => item.id === prompt.id) === index,
+  );
+  const experiments = latestPrompts.filter((p) => p.kind === "experiment"),
+    evaluators = latestPrompts.filter((p) => p.kind === "evaluator");
   const selectedPrompt = prompts.find((p) => p.versionId === promptId);
   const selectedScope = scopes.find((scope) => scope.id === scopeId);
   const promptPreview = selectedPrompt
@@ -686,50 +691,145 @@ function App() {
                 </h1>
                 <p>Versioned prompt pairs. Reproducible experiments.</p>
               </div>
-              <button
-                className="primary"
-                onClick={() => {
-                  setPromptNameStatus(null);
-                  setEditing({
-                    name: "",
-                    kind: "experiment",
-                    systemContent: "",
-                    userContent: "",
-                  });
-                }}
-              >
-                ＋ New prompt
-              </button>
+              <div className="row">
+                <button
+                  className="danger"
+                  disabled={busy}
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        "Replace every prompt and version with the contents of apps/server/src/prompt-seeds.ts? Existing runs will keep their saved request snapshots.",
+                      )
+                    )
+                      return;
+                    void action(async () => {
+                      await api("/prompts/reseed", {});
+                      const next = await api("/prompts");
+                      setPrompts(next);
+                      setPromptId(
+                        next.find((p: any) => p.kind === "experiment")
+                          ?.versionId || 0,
+                      );
+                      setEvalPrompt(
+                        next.find((p: any) => p.kind === "evaluator")
+                          ?.versionId || 0,
+                      );
+                      setHistoryPromptId(null);
+                      setEditing(null);
+                      setPromptNameStatus(null);
+                      setNotice("Prompts reset from the seed file.");
+                    });
+                  }}
+                >
+                  ↻ Reset from seed file
+                </button>
+                <button
+                  className="primary"
+                  onClick={() => {
+                    setPromptNameStatus(null);
+                    setEditing({
+                      name: "",
+                      kind: "experiment",
+                      systemContent: "",
+                      userContent: "",
+                    });
+                  }}
+                >
+                  ＋ New prompt
+                </button>
+              </div>
             </header>
             <div className="columns">
               <section className="panel form">
-                <h2>Saved versions</h2>
-                {prompts.map((p) => (
-                  <button
-                    key={p.versionId}
-                    className={
-                      "prompt-item " +
-                      (editing?.versionId === p.versionId ? "chosen" : "")
-                    }
-                    onClick={() => {
-                      setPromptNameStatus(null);
-                      setEditing({ ...p });
-                    }}
-                  >
-                    <div>
-                      <b>{p.name}</b>
-                      <small>
-                        {p.kind} · {date(p.created_at)}
-                      </small>
+                <h2>Latest prompts</h2>
+                <p className="muted seed-file-note">
+                  Starter content lives in{" "}
+                  <code>apps/server/src/prompt-seeds.ts</code>.
+                </p>
+                {latestPrompts.map((p) => {
+                  const older = prompts.filter(
+                    (version) =>
+                      version.id === p.id && version.versionId !== p.versionId,
+                  );
+                  const expanded = historyPromptId === p.id;
+                  return (
+                    <div className="prompt-group" key={p.id}>
+                      <button
+                        className={
+                          "prompt-item " +
+                          (editing?.versionId === p.versionId ? "chosen" : "")
+                        }
+                        onClick={() => {
+                          setPromptNameStatus(null);
+                          setEditing({ ...p });
+                        }}
+                      >
+                        <div>
+                          <b>{p.name}</b>
+                          <small>
+                            {p.kind} · {date(p.created_at)}
+                          </small>
+                        </div>
+                        <span className="pill">v{p.version}</span>
+                      </button>
+                      {older.length > 0 && (
+                        <button
+                          className="history-toggle"
+                          aria-expanded={expanded}
+                          onClick={() =>
+                            setHistoryPromptId(expanded ? null : p.id)
+                          }
+                        >
+                          <span aria-hidden="true">{expanded ? "▴" : "▾"}</span>{" "}
+                          {expanded
+                            ? "Hide history"
+                            : `Show ${older.length} older ${older.length === 1 ? "version" : "versions"}`}
+                        </button>
+                      )}
+                      {expanded && (
+                        <div className="prompt-history">
+                          {older.map((version) => (
+                            <button
+                              key={version.versionId}
+                              className={
+                                "prompt-item historical " +
+                                (editing?.versionId === version.versionId
+                                  ? "chosen"
+                                  : "")
+                              }
+                              onClick={() => {
+                                setPromptNameStatus(null);
+                                setEditing({ ...version });
+                              }}
+                            >
+                              <div>
+                                <b>{version.name}</b>
+                                <small>
+                                  {version.kind} · {date(version.created_at)}
+                                </small>
+                              </div>
+                              <span className="pill">v{version.version}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <span className="pill">v{p.version}</span>
-                  </button>
-                ))}
+                  );
+                })}
               </section>
               <section className="panel form">
                 <h2>{editing?.id ? "Create next version" : "Prompt editor"}</h2>
                 {editing ? (
                   <>
+                    {editing.id &&
+                      editing.version <
+                        (latestPrompts.find((p) => p.id === editing.id)
+                          ?.version || 0) && (
+                        <p className="history-notice">
+                          Viewing historical version v{editing.version}. Saving
+                          it creates a new latest version.
+                        </p>
+                      )}
                     <label>
                       <span className="prompt-name-label">
                         <span>Name</span>
@@ -823,13 +923,16 @@ function App() {
                       disabled={busy}
                       onClick={() =>
                         action(async () => {
-                          await api(
+                          const saved = await api(
                             editing.id
                               ? `/prompts/${editing.id}/versions`
                               : "/prompts",
                             editing,
                           );
                           setPrompts(await api("/prompts"));
+                          if (editing.kind === "experiment")
+                            setPromptId(saved.versionId);
+                          else setEvalPrompt(saved.versionId);
                           setNotice("New prompt version saved.");
                           setPromptNameStatus(null);
                           setEditing(null);

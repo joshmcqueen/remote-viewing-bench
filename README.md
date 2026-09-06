@@ -42,6 +42,8 @@ Open http://127.0.0.1:3001. Both servers bind to loopback. No login or cloud dep
 6. Choose a structured-output evaluator; images also require vision support. Run evaluation and review correspondence scores, evidence, contradictions, and unverifiable claims.
 7. Refine prompts by saving a new version. Re-evaluations and target corrections preserve previous evidence and results.
 
+The prompt library shows only each prompt's latest version by default. Expand a prompt's history to inspect or branch from an older version. The complete starter catalog is an IDE-friendly TypeScript file at `apps/server/src/prompt-seeds.ts`; after editing it (and allowing the development server to restart), choose **Reset from seed file** in the prompt library to replace the catalog with fresh version 1 prompts. Existing runs retain their immutable request snapshots, but their links to deleted prompt versions are cleared.
+
 The starter score is a qualitative **0–7 correspondence rating**, adapted from historical SRI descriptions. It is not a percentage or a statistical test. Seed categories are inspired by CRV sensory and dimensional descriptions. Prompts are editable; the structured evaluation response shape remains fixed in v1.
 
 Sources: [SRI correspondence scale archive](https://sentinel-files.com/files/cia-rdp96-00789r003200200001-4-sf-2026-001038), [CRV Stage II manual](https://rviewer.com/introduction-to-the-controlled-coordinate-remote-viewing-manual/crv-stage-2-coordinate-controlled-remote-viewing-manual/).

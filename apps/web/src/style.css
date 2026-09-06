@@ -533,6 +533,51 @@ pre {
   margin: 10px 0;
   padding: 15px;
 }
+.prompt-group {
+  margin: 10px 0 18px;
+}
+.prompt-group > .prompt-item {
+  margin-bottom: 0;
+}
+.history-toggle {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 8px 10px 2px;
+}
+.history-toggle:hover {
+  background: transparent;
+  color: var(--green);
+}
+.prompt-history {
+  border-left: 2px solid var(--line);
+  margin: 6px 0 0 12px;
+  padding-left: 10px;
+}
+.prompt-item.historical {
+  opacity: 0.58;
+  margin: 7px 0;
+}
+.prompt-item.historical:hover,
+.prompt-item.historical.chosen {
+  opacity: 1;
+}
+.seed-file-note {
+  line-height: 1.5;
+}
+.seed-file-note code {
+  overflow-wrap: anywhere;
+}
+.history-notice {
+  background: #f4f2e9;
+  border: 1px solid #e5dfc8;
+  border-radius: 7px;
+  color: #746c4f;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 10px 12px;
+}
 .prompt-item small {
   display: block;
   margin-top: 6px;

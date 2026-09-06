@@ -1,11 +1,19 @@
 import Database from "better-sqlite3";
-import {
-  experimentSeed,
-  experimentUserSeed,
-  evaluatorSeed,
-  evaluatorUserSeed,
-  defaultScopes,
-} from "@rv/shared";
+import { defaultScopes, PromptInput } from "@rv/shared";
+import { promptSeeds } from "./prompt-seeds.js";
+
+export function seedPrompts(db: Database.Database) {
+  const insertPrompt = db.prepare("INSERT INTO prompts(name,kind) VALUES(?,?)");
+  const insertVersion = db.prepare(
+    "INSERT INTO versions(prompt_id,version,system_content,user_content) VALUES(?,1,?,?)",
+  );
+  for (const rawPrompt of promptSeeds) {
+    const prompt = PromptInput.parse(rawPrompt);
+    const id = insertPrompt.run(prompt.name, prompt.kind).lastInsertRowid;
+    insertVersion.run(id, prompt.systemContent, prompt.userContent);
+  }
+}
+
 export function openDb(path: string) {
   const db = new Database(path);
   db.pragma("journal_mode = WAL");
@@ -32,22 +40,7 @@ export function openDb(path: string) {
       );
       for (const scope of defaultScopes)
         insertScope.run(scope.name, scope.description);
-      for (const [name, kind, systemContent, userContent] of [
-        ["First impressions", "experiment", experimentSeed, experimentUserSeed],
-        [
-          "Correspondence rubric",
-          "evaluator",
-          evaluatorSeed,
-          evaluatorUserSeed,
-        ],
-      ]) {
-        const id = db
-          .prepare("INSERT INTO prompts(name,kind) VALUES(?,?)")
-          .run(name, kind).lastInsertRowid;
-        db.prepare(
-          "INSERT INTO versions(prompt_id,version,system_content,user_content) VALUES(?,1,?,?)",
-        ).run(id, systemContent, userContent);
-      }
+      seedPrompts(db);
     })();
   db.prepare(
     "UPDATE jobs SET status='interrupted',error='Server stopped before completion' WHERE status IN ('queued','running')",

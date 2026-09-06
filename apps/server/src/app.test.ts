@@ -147,6 +147,36 @@ test("renaming prompts preserves versions and validates names", async () => {
     await f.close();
   }
 });
+test("reseed replaces prompt history while preserving run snapshots", async () => {
+  const f = await fixture();
+  try {
+    const experiment = f.ps.find((p: any) => p.kind === "experiment");
+    await f.call(`/prompts/${experiment.id}/versions`, {
+      ...experiment,
+      systemContent: "Temporary system prompt",
+      userContent: "Temporary user prompt",
+    });
+    const runId = (await f.call("/runs", { ...f.input, models: ["test/one"] }))
+      .data.id;
+    const before = await f.wait(runId);
+
+    const reset = await f.call("/prompts/reseed", {});
+    assert.equal(reset.status, 200);
+    const prompts = (await f.call("/prompts")).data;
+    assert.equal(prompts.length, 2);
+    assert.ok(prompts.every((prompt: any) => prompt.version === 1));
+    assert.deepEqual(
+      prompts.map((prompt: any) => prompt.name),
+      ["First impressions", "Correspondence rubric"],
+    );
+
+    const after = (await f.call(`/runs/${runId}`)).data;
+    assert.equal(after.prompt_version_id, null);
+    assert.deepEqual(after.messages, before.messages);
+  } finally {
+    await f.close();
+  }
+});
 test("project scopes can be added, edited, renamed, and deleted", async () => {
   const f = await fixture();
   try {
