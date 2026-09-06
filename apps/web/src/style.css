@@ -1337,59 +1337,82 @@ pre {
 }
 .call-details {
   margin: 16px 0 0;
+}
+.call-detail-controls {
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 7px;
-  overflow: hidden;
-}
-.call-detail-tabs {
-  display: flex;
-  align-items: center;
   background: #fafbf8;
 }
-.call-detail-tabs > button {
-  position: relative;
-  min-width: 108px;
-  padding: 12px 15px;
+.call-detail-controls > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
   border: 0;
   border-right: 1px solid var(--line);
   border-radius: 0;
   background: transparent;
   color: #465743;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
 }
-.call-detail-tabs > button:hover {
+.call-detail-controls > button:last-child {
+  border-right: 0;
+}
+.call-detail-controls > button:hover {
   background: #f3f6ef;
 }
-.call-detail-tabs > button.active {
-  background: #fff;
+.call-detail-controls > button.active {
+  background: #eef3ea;
   color: var(--green);
 }
-.call-detail-tabs > button.active::after {
-  content: "";
-  position: absolute;
-  inset: auto 13px -1px;
-  height: 2px;
-  background: #78965d;
+.call-detail-chevron {
+  display: inline-block;
+  width: 10px;
+  color: #7d8d76;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 0.7;
+  transform: rotate(0deg);
+  transform-origin: center;
+  transition: transform 0.15s ease;
 }
-.call-detail-tabs > button:disabled {
+.call-detail-controls > button.active .call-detail-chevron {
+  transform: rotate(90deg);
+}
+.call-detail-controls > button:disabled {
   cursor: default;
-}
-.call-detail-tabs > .call-detail-collapse {
-  min-width: auto;
-  margin-left: auto;
-  border-right: 0;
-  border-left: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 500;
 }
 .call-detail-panel {
   max-height: min(680px, 65vh);
+  margin-top: 8px;
   overflow: auto;
-  border-top: 1px solid var(--line);
+  border: 1px solid var(--line);
+  border-radius: 7px;
   background: #fff;
   outline-offset: -3px;
+}
+.call-detail-panel-actions {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 12px 0;
+  background: inherit;
+}
+.call-detail-copy {
+  padding: 6px 9px;
+  color: #5f705b;
+  font-size: 10px;
+  font-weight: 600;
+}
+.call-detail-panel-actions + .markdown-response,
+.call-detail-panel-actions + .raw-json {
+  padding-top: 8px;
 }
 .markdown-response {
   padding: 18px;
@@ -1743,9 +1766,18 @@ html[data-theme="dark"] textarea::placeholder {
 }
 html[data-theme="dark"] .settings-field,
 html[data-theme="dark"] .retry-toggle,
-html[data-theme="dark"] .call-detail-tabs > button,
+html[data-theme="dark"] .call-detail-controls > button,
 html[data-theme="dark"] .markdown-response {
   color: #c8d5cb;
+}
+html[data-theme="dark"] .call-detail-controls,
+html[data-theme="dark"] .call-detail-controls > button {
+  border-color: var(--line);
+  background: #19231d;
+}
+html[data-theme="dark"] .call-detail-controls > button:hover,
+html[data-theme="dark"] .call-detail-controls > button.active {
+  background: #26362c;
 }
 html[data-theme="dark"] .model {
   border-bottom-color: #2c3d32;
