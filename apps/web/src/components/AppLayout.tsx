@@ -44,7 +44,12 @@ export function AppLayout({
               key={v}
               onClick={() => navigate(v)}
             >
-              <span>{icon}</span>
+              <span
+                aria-hidden="true"
+                className={`nav-icon nav-icon-${v.toLowerCase().replace(" ", "-")}`}
+              >
+                {icon}
+              </span>
               {v}
               {v === "Runs" && <small>{runCount}</small>}
             </button>

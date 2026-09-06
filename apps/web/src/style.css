@@ -107,10 +107,28 @@ nav {
   font-size: 14px;
   color: #687365;
 }
-.nav span {
-  width: 20px;
-  font-size: 20px;
-  line-height: 20px;
+.nav-icon {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 21px;
+  line-height: 1;
+}
+.nav-icon-runs,
+.nav-icon-settings {
+  transform: scale(1.08);
+}
+.nav-icon-prompts {
+  transform: scale(1.3);
+}
+.nav-icon-new-run {
+  transform: scale(0.95);
+}
+.nav-icon-about {
+  transform: scale(0.82);
 }
 .nav small {
   margin-left: auto;

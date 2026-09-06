@@ -1,7 +1,8 @@
 export async function api(path: string, body?: unknown, method?: string) {
   const r = await fetch(`/api${path}`, {
     method: method || (body === undefined ? "GET" : "POST"),
-    headers: { "Content-Type": "application/json" },
+    headers:
+      body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await r.json();
