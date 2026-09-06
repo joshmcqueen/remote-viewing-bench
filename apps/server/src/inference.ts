@@ -105,6 +105,7 @@ export function createInference(
       throw Object.assign(new Error(safeError(e)), {
         traceId: tracing ? traceId : undefined,
         traceError,
+        statusCode: (e as any)?.status ?? (e as any)?.statusCode,
       });
     }
     if (client)

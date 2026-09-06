@@ -16,14 +16,22 @@ export function SettingsPage({
     | "models"
     | "scopes"
     | "savePrefs"
+    | "setPrefs"
     | "selectPreferredEvaluator"
   >;
   editor: ScopeEditor;
   modelPicker: ReactNode;
   busy: boolean;
 }) {
-  const { config, prefs, models, scopes, savePrefs, selectPreferredEvaluator } =
-    workspace;
+  const {
+    config,
+    prefs,
+    setPrefs,
+    models,
+    scopes,
+    savePrefs,
+    selectPreferredEvaluator,
+  } = workspace;
   const { editingScope, setEditingScope, deleteScope, saveScope } = editor;
   return (
     <>
@@ -108,6 +116,61 @@ export function SettingsPage({
                 ))}
             </select>
           </label>
+          <div className="divider" />
+          <h2>Automatic retries</h2>
+          <label className="model">
+            <input
+              type="checkbox"
+              checked={prefs.autoRetry}
+              onChange={(e) =>
+                setPrefs({ ...prefs, autoRetry: e.target.checked })
+              }
+            />
+            <span>
+              Retry transient provider errors
+              <small>
+                Includes rate limits (429) and temporary 5xx errors.
+              </small>
+            </span>
+          </label>
+          <div className="row">
+            <label>
+              Delay (seconds)
+              <input
+                type="number"
+                min="1"
+                max="300"
+                disabled={!prefs.autoRetry}
+                value={prefs.autoRetryDelaySeconds}
+                onChange={(e) =>
+                  setPrefs({
+                    ...prefs,
+                    autoRetryDelaySeconds: Number(e.target.value),
+                  })
+                }
+              />
+            </label>
+            <label>
+              Maximum retries
+              <input
+                type="number"
+                min="1"
+                max="10"
+                disabled={!prefs.autoRetry}
+                value={prefs.autoRetryMaxRetries}
+                onChange={(e) =>
+                  setPrefs({
+                    ...prefs,
+                    autoRetryMaxRetries: Number(e.target.value),
+                  })
+                }
+              />
+            </label>
+          </div>
+          <p className="muted">
+            New runs use these values. Manual and automatic retries replace the
+            failed item and increase its attempt number.
+          </p>
           <button className="primary" disabled={busy} onClick={savePrefs}>
             Save preferences
           </button>

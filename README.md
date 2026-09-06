@@ -37,7 +37,7 @@ Open http://127.0.0.1:3001. Both servers bind to loopback. No login or cloud dep
 1. Publish your envelope code and target outside this app.
 2. Refresh the model catalog under New Run or Settings. Select the models to use.
 3. Create a run with only the envelope code, project scope, prompt version, and generation settings. The three starter scopes are a physical object, text written on paper, and the subject of a photograph; scopes can be managed in Settings. Review the exact system and user messages before starting.
-4. Wait for responses. Failed requests remain visible; retry creates another attempt. Cancellation preserves completed responses.
+4. Wait for responses. Transient provider failures are retried automatically according to Settings; a manual retry replaces the failed item and increments its attempt number. Cancellation preserves completed responses.
 5. Reveal the target with a description and optional JPEG, PNG, or WebP image (10 MB maximum).
 6. Choose a structured-output evaluator; images also require vision support. Run evaluation and review correspondence scores, evidence, contradictions, and unverifiable claims.
 7. Refine prompts by saving a new version. Re-evaluations and target corrections preserve previous evidence and results.
@@ -50,13 +50,13 @@ Sources: [SRI correspondence scale archive](https://sentinel-files.com/files/cia
 
 ## Data and tracing
 
-All application records and image BLOBs live in `data/bench.sqlite`. SQLite uses WAL; stop the server before backing up the entire `data` directory. Credentials and local data are Git-ignored. Prompt versions, run payloads, generation attempts, reveals, evaluation batches, and results are persistent. Unfinished requests become interrupted after restart; they are never automatically resubmitted.
+All application records and image BLOBs live in `data/bench.sqlite`. SQLite uses WAL; stop the server before backing up the entire `data` directory. Credentials and local data are Git-ignored. Prompt versions, run payloads, generation attempts, reveals, evaluation batches, and results are persistent. Unfinished or scheduled requests become interrupted after restart; they are never automatically resubmitted after a restart.
 
 Each inference uses a fresh OpenRouter conversation with separate, editable system and user prompt templates, and with no tools, search plugins, or browsing integration. Experiment templates support target-code and target-scope variables; evaluator user templates support target scope, description, and response variables. Online/search-oriented models, automatic routers, batch variants, and non-text output models are excluded. `provider.require_parameters` asks OpenRouter to route only to providers supporting the requested settings; unsupported settings fail visibly rather than silently disappearing. Target evidence enters only evaluator requests, and generation retries are disallowed after reveal.
 
 LangSmith receives full inference inputs and outputs, including target images for evaluation, with run/model/prompt metadata. Trace names begin with the target ID, and metadata includes the target ID and scope plus local run, job, attempt, batch, source-job, model, repetition, and prompt-version identifiers when applicable. The UI links to traces when available and shows tracing delivery errors without discarding model output. Traces expose app-level requests and responses, not provider-internal execution. No API credentials are intentionally included in payloads or trace metadata.
 
-There is no durable trace-export queue or automatic inference retry. Cancellation can abort the local request, but a provider may still finish or bill it. Each failed/cancelled attempt stays in history even when a retry succeeds.
+There is no durable trace-export queue. Transient provider errors (including rate limits and temporary server errors) can be retried automatically after a configurable delay and up to a configurable limit. The defaults are one retry after 10 seconds. Manual and automatic retries reuse the same list item, clear the failed response snapshot when the next attempt begins, and increment its attempt number. Cancellation can abort the local request, but a provider may still finish or bill it.
 
 ## Commands and layout
 

@@ -43,7 +43,7 @@ export function openDb(path: string) {
       seedPrompts(db);
     })();
   db.prepare(
-    "UPDATE jobs SET status='interrupted',error='Server stopped before completion' WHERE status IN ('queued','running')",
+    "UPDATE jobs SET status='interrupted',error='Server stopped before completion' WHERE status IN ('queued','running','retrying')",
   ).run();
   return db;
 }

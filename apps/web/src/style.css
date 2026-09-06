@@ -500,7 +500,8 @@ pre {
   background: #e9f2e4;
   color: #587444;
 }
-.status.running {
+.status.running,
+.status.retrying {
   background: #edf1df;
   color: #7a8649;
 }

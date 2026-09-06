@@ -45,7 +45,7 @@ export function useRuns(
   const generationJobs =
     detail?.jobs.filter((j: any) => j.kind === "generation") || [];
   const activeGeneration = generationJobs.some((j: any) =>
-    ["running", "queued"].includes(j.status),
+    ["running", "queued", "retrying"].includes(j.status),
   );
   const selectedBatch = batch ?? detail?.batches[0]?.id;
   const evaluationJobs =

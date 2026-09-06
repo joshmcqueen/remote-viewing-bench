@@ -236,9 +236,8 @@ test("project scopes can be added, edited, renamed, and deleted", async () => {
 test("runs and all of their owned records can be deleted", async () => {
   const f = await fixture();
   try {
-    const id = (
-      await f.call("/runs", { ...f.input, models: ["test/one"] })
-    ).data.id;
+    const id = (await f.call("/runs", { ...f.input, models: ["test/one"] }))
+      .data.id;
     await f.wait(id);
     await f.call(`/runs/${id}/reveal`, {
       description: "secret red marble",
@@ -283,10 +282,12 @@ test("deleting an active run aborts its in-flight work", async () => {
       }),
   );
   try {
-    const id = (
-      await f.call("/runs", { ...f.input, models: ["test/one"] })
-    ).data.id;
-    assert.equal((await f.call(`/runs/${id}`, undefined, "DELETE")).status, 200);
+    const id = (await f.call("/runs", { ...f.input, models: ["test/one"] }))
+      .data.id;
+    assert.equal(
+      (await f.call(`/runs/${id}`, undefined, "DELETE")).status,
+      200,
+    );
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(aborted, 1);
     assert.equal((await f.call(`/runs/${id}`)).status, 404);
@@ -407,7 +408,7 @@ test("full experiment, immutable prompts, identical payloads, reveal and evaluat
     await f.close();
   }
 });
-test("partial failure and explicit retry append attempts; trace warnings preserve output", async () => {
+test("partial failure and explicit retry replace the failed item; trace warnings preserve output", async () => {
   let fail = true;
   const f = await fixture(async (p) => {
     if (p.model === "test/two" && fail) throw new Error("Provider unavailable");
@@ -426,9 +427,11 @@ test("partial failure and explicit retry append attempts; trace warnings preserv
     fail = false;
     await f.call(`/jobs/${failed.id}/retry`, {});
     r = await f.wait(id);
-    assert.equal(r.jobs.length, 3);
-    assert.equal(r.jobs[2].attempt, 2);
-    assert.equal(r.jobs[1].status, "error");
+    assert.equal(r.jobs.length, 2);
+    assert.equal(r.jobs[1].id, failed.id);
+    assert.equal(r.jobs[1].attempt, 2);
+    assert.equal(r.jobs[1].status, "complete");
+    assert.equal(r.status, "complete");
     assert.equal((await f.call(`/jobs/${failed.id}/retry`, {})).status, 400);
   } finally {
     await f.close();
@@ -459,7 +462,7 @@ test("active reveal blocked; cancellation prevents pending jobs from dispatching
     await f.close();
   }
 });
-test("invalid scoring retained, compatible model required, evaluator retry creates attempt", async () => {
+test("invalid scoring can be replaced by a valid evaluator retry", async () => {
   let valid = false;
   const f = await fixture(async (p) => ({
     response: response(
@@ -484,26 +487,69 @@ test("invalid scoring retained, compatible model required, evaluator retry creat
     valid = true;
     await f.call(`/jobs/${bad.id}/retry`, {});
     r = await f.wait(id);
-    assert.equal(r.jobs[2].result.score, 5);
-    assert.equal(r.jobs[1].result, null);
+    assert.equal(r.jobs.length, 2);
+    assert.equal(r.jobs[1].id, bad.id);
+    assert.equal(r.jobs[1].attempt, 2);
+    assert.equal(r.jobs[1].result.score, 5);
   } finally {
     await f.close();
   }
 });
-test("restart marks queued and active work interrupted without modifying complete attempts", () => {
+test("rate limits retry automatically after the configured delay", async () => {
+  let calls = 0;
+  const f = await fixture(async () => {
+    calls++;
+    if (calls === 1)
+      throw Object.assign(new Error("429 Provider returned error"), {
+        statusCode: 429,
+      });
+    return { response: response("red") };
+  });
+  try {
+    const id = (
+      await f.call("/runs", {
+        ...f.input,
+        models: ["test/one"],
+        autoRetry: true,
+        autoRetryDelaySeconds: 1,
+        autoRetryMaxRetries: 1,
+      })
+    ).data.id;
+    const scheduled = (await f.call(`/runs/${id}`)).data;
+    assert.equal(scheduled.jobs.length, 1);
+    assert.equal(scheduled.jobs[0].status, "retrying");
+    assert.match(scheduled.jobs[0].error, /Automatically retrying in 1 second/);
+
+    let completed: any;
+    for (let n = 0; n < 300; n++) {
+      completed = (await f.call(`/runs/${id}`)).data;
+      if (completed.status !== "running") break;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.equal(calls, 2);
+    assert.equal(completed.status, "complete");
+    assert.equal(completed.jobs.length, 1);
+    assert.equal(completed.jobs[0].attempt, 2);
+    assert.equal(completed.jobs[0].error, null);
+  } finally {
+    await f.close();
+  }
+});
+test("restart marks queued, active, and scheduled work interrupted without modifying complete attempts", () => {
   const dir = mkdtempSync(join(tmpdir(), "rv-test-"));
   try {
     let db = openDb(join(dir, "bench.sqlite"));
     db.prepare(
       "INSERT INTO runs(id,code,scope_name,scope_description,messages,settings) VALUES(1,'x','Physical object','an object','[]','{}')",
     ).run();
-    for (const status of ["queued", "running", "complete"])
+    for (const status of ["queued", "running", "retrying", "complete"])
       db.prepare(
         "INSERT INTO jobs(run_id,kind,model,repetition,status,payload) VALUES(1,'generation','test/one',1,?,'{}')",
       ).run(status);
     db.close();
     db = openDb(join(dir, "bench.sqlite"));
     assert.deepEqual(db.prepare("SELECT status FROM jobs ORDER BY id").all(), [
+      { status: "interrupted" },
       { status: "interrupted" },
       { status: "interrupted" },
       { status: "complete" },
@@ -536,6 +582,8 @@ test("configuration missing blocks inference, settings persist, foreign origins 
       "PUT",
     );
     assert.equal((await f.call("/settings")).data.repetitions, 2);
+    assert.equal((await f.call("/settings")).data.autoRetry, true);
+    assert.equal((await f.call("/settings")).data.autoRetryDelaySeconds, 10);
     const bad = await f.app.inject({
       url: "/api/config",
       headers: { origin: "https://untrusted.example" },

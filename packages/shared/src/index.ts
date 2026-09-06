@@ -15,6 +15,9 @@ export const Settings = z.object({
   temperature: z.number().min(0).max(2).nullable().default(null),
   maxTokens: z.number().int().min(128).max(32000).default(2048),
   evaluatorModel: z.string().default(""),
+  autoRetry: z.boolean().default(true),
+  autoRetryDelaySeconds: z.number().int().min(1).max(300).default(10),
+  autoRetryMaxRetries: z.number().int().min(1).max(10).default(1),
 });
 export const RunInput = Settings.extend({
   code: z.string().trim().min(1).max(120),

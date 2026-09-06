@@ -28,7 +28,7 @@ export function JobFooter({
       {j.error && <p className="error-text">{j.error}</p>}
       {["error", "interrupted", "cancelled"].includes(j.status) && canRetry && (
         <button disabled={busy} onClick={() => onRetry(j.id)}>
-          Retry as new attempt
+          Retry
         </button>
       )}
       {showSnapshot && (

@@ -16,7 +16,7 @@ import {
 import type { DB } from "./db.js";
 import { seedPrompts } from "./db.js";
 import type { Inference } from "./inference.js";
-const active = "('queued','running')";
+const active = "('queued','running','retrying')";
 export function buildApp(
   db: DB,
   infer: Inference,
@@ -29,11 +29,27 @@ export function buildApp(
 ) {
   const app = Fastify({ bodyLimit: 15 * 1024 * 1024 });
   const controllers = new Map<number, AbortController>();
+  const retryTimers = new Map<number, ReturnType<typeof setTimeout>>();
   let closing = false;
   const row = (sql: string, ...args: any[]) =>
     db.prepare(sql).get(...args) as any;
   const all = (sql: string, ...args: any[]) =>
     db.prepare(sql).all(...args) as any[];
+  const currentJobs = (runId: number) =>
+    all(
+      `SELECT j.* FROM jobs j
+       WHERE j.run_id=? AND NOT EXISTS (
+         SELECT 1 FROM jobs newer
+         WHERE newer.run_id=j.run_id
+           AND newer.kind=j.kind
+           AND newer.model=j.model
+           AND newer.repetition=j.repetition
+           AND newer.batch_id IS j.batch_id
+           AND (newer.attempt>j.attempt OR (newer.attempt=j.attempt AND newer.id>j.id))
+       )
+       ORDER BY j.id`,
+      runId,
+    );
   const requireRow = (value: any) => {
     if (!value)
       throw Object.assign(new Error("Not found"), { statusCode: 404 });
@@ -93,10 +109,12 @@ export function buildApp(
       id,
     );
   const summary = (r: any) => {
-    const counts = all(
-      "SELECT status,COUNT(*) count FROM jobs WHERE run_id=? GROUP BY status",
-      r.id,
-    );
+    const counts = Object.entries(
+      currentJobs(r.id).reduce<Record<string, number>>((result, job) => {
+        result[job.status] = (result[job.status] || 0) + 1;
+        return result;
+      }, {}),
+    ).map(([status, count]) => ({ status, count }));
     return {
       ...r,
       settings: JSON.parse(r.settings),
@@ -106,9 +124,13 @@ export function buildApp(
         (c) => c.status === "running" || c.status === "queued",
       )
         ? "running"
-        : counts.some((c) => c.status === "error" || c.status === "interrupted")
-          ? "needs attention"
-          : "complete",
+        : counts.some((c) => c.status === "retrying")
+          ? "running"
+          : counts.some(
+                (c) => c.status === "error" || c.status === "interrupted",
+              )
+            ? "needs attention"
+            : "complete",
     };
   };
   const decodeJob = (j: any) => ({
@@ -154,6 +176,54 @@ export function buildApp(
           attempt,
         ).lastInsertRowid,
     );
+  const retryableProviderError = (error: unknown, message: string) => {
+    const status = Number(
+      (error as any)?.statusCode ?? (error as any)?.status ?? 0,
+    );
+    return (
+      status === 408 ||
+      status === 409 ||
+      status === 429 ||
+      (status >= 500 && status <= 599) ||
+      /\b(?:408|409|429|5\d\d)\b|rate.?limit|temporar(?:y|ily)/i.test(message)
+    );
+  };
+  const beginRetry = (id: number, expectedStatus: string) => {
+    const result = db
+      .prepare(
+        `UPDATE jobs
+         SET attempt=attempt+1,status='queued',response=NULL,result=NULL,error=NULL,
+             trace_id=NULL,trace_url=NULL,trace_error=NULL,
+             created_at=CURRENT_TIMESTAMP,finished_at=NULL
+         WHERE id=? AND status=?`,
+      )
+      .run(id, expectedStatus);
+    if (result.changes) pump();
+    return !!result.changes;
+  };
+  const scheduleAutoRetry = (j: any, error: unknown, message: string) => {
+    if (closing || !retryableProviderError(error, message)) return false;
+    const settings = Settings.parse(JSON.parse(run(j.run_id).settings));
+    const retriesUsed = j.attempt - 1;
+    if (!settings.autoRetry || retriesUsed >= settings.autoRetryMaxRetries)
+      return false;
+    const delay = settings.autoRetryDelaySeconds;
+    const result = db
+      .prepare(
+        "UPDATE jobs SET status='retrying',error=? WHERE id=? AND status='error'",
+      )
+      .run(
+        `${message}\nAutomatically retrying in ${delay} second${delay === 1 ? "" : "s"}.`,
+        j.id,
+      );
+    if (!result.changes) return false;
+    const timer = setTimeout(() => {
+      retryTimers.delete(j.id);
+      if (!closing) beginRetry(j.id, "retrying");
+    }, delay * 1000);
+    retryTimers.set(j.id, timer);
+    return true;
+  };
   async function execute(j: any) {
     const controller = new AbortController();
     controllers.set(j.id, controller);
@@ -219,9 +289,12 @@ export function buildApp(
         process.env.LANGSMITH_API_KEY,
       ])
         if (key) error = error.replaceAll(key, "[redacted]");
-      db.prepare(
-        "UPDATE jobs SET status='error',error=?,finished_at=CURRENT_TIMESTAMP WHERE id=? AND status='running'",
-      ).run(error, j.id);
+      const saved = db
+        .prepare(
+          "UPDATE jobs SET status='error',error=?,finished_at=CURRENT_TIMESTAMP WHERE id=? AND status='running'",
+        )
+        .run(error, j.id);
+      if (saved.changes) scheduleAutoRetry(j, e, error);
     } finally {
       controllers.delete(j.id);
       pump();
@@ -239,6 +312,8 @@ export function buildApp(
   }
   app.addHook("onClose", async () => {
     closing = true;
+    for (const timer of retryTimers.values()) clearTimeout(timer);
+    retryTimers.clear();
     for (const c of controllers.values()) c.abort();
   });
   app.setErrorHandler((error, _req, reply) => {
@@ -487,9 +562,7 @@ export function buildApp(
     const id = Number(req.params.id);
     return {
       ...summary(run(id)),
-      jobs: all("SELECT * FROM jobs WHERE run_id=? ORDER BY id", id).map(
-        decodeJob,
-      ),
+      jobs: currentJobs(id).map(decodeJob),
       reveal: revealView(
         row(
           "SELECT * FROM reveals WHERE run_id=? ORDER BY id DESC LIMIT 1",
@@ -511,7 +584,12 @@ export function buildApp(
     const id = Number(req.params.id);
     run(id);
     const jobs = all("SELECT id FROM jobs WHERE run_id=?", id);
-    for (const job of jobs) controllers.get(job.id)?.abort();
+    for (const job of jobs) {
+      controllers.get(job.id)?.abort();
+      const timer = retryTimers.get(job.id);
+      if (timer) clearTimeout(timer);
+      retryTimers.delete(job.id);
+    }
     return db.transaction(() => {
       // Break self-references before removing a run's job attempts.
       db.prepare("UPDATE jobs SET source_id=NULL WHERE run_id=?").run(id);
@@ -532,7 +610,12 @@ export function buildApp(
     db.prepare(
       `UPDATE jobs SET status='cancelled',finished_at=CURRENT_TIMESTAMP WHERE run_id=? AND status IN ${active}`,
     ).run(id);
-    for (const j of jobs) controllers.get(j.id)?.abort();
+    for (const j of jobs) {
+      controllers.get(j.id)?.abort();
+      const timer = retryTimers.get(j.id);
+      if (timer) clearTimeout(timer);
+      retryTimers.delete(j.id);
+    }
     return { ok: true };
   });
   app.post<{ Params: { id: string } }>("/api/jobs/:id/retry", async (req) => {
@@ -559,18 +642,8 @@ export function buildApp(
       family.some((x) => ["queued", "running", "complete"].includes(x.status))
     )
       fail("This request already has an active or successful attempt");
-    const id = saveJob(
-      j.run_id,
-      j.kind,
-      j.model,
-      j.repetition,
-      JSON.parse(j.payload),
-      j.batch_id,
-      j.source_id,
-      Math.max(...family.map((x) => x.attempt)) + 1,
-    );
-    pump();
-    return { id };
+    if (!beginRetry(j.id, j.status)) fail("This request could not be retried");
+    return { id: j.id };
   });
   app.post<{ Params: { id: string } }>("/api/runs/:id/reveal", async (req) => {
     const id = Number(req.params.id);

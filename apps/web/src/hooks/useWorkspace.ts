@@ -14,6 +14,9 @@ export function useWorkspace({ setError, setNotice, action }: Feedback) {
     temperature: null,
     maxTokens: 2048,
     evaluatorModel: "",
+    autoRetry: true,
+    autoRetryDelaySeconds: 10,
+    autoRetryMaxRetries: 1,
   });
   const [search, setSearch] = useState("");
   const [scopeId, setScopeId] = useState(0);
