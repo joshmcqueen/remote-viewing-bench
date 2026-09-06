@@ -422,6 +422,17 @@ header p {
 .settings-field select {
   margin-top: 8px;
 }
+.settings-field small {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  font-weight: 400;
+  line-height: 1.5;
+}
+.compact-settings-field {
+  max-width: 360px;
+  margin-top: 0;
+}
 .retry-toggle {
   display: flex;
   align-items: center;
@@ -467,6 +478,33 @@ header p {
 }
 .detail-columns {
   grid-template-columns: minmax(0, 1.65fr) minmax(270px, 1fr);
+}
+.run-settings-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0 0 20px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--line);
+}
+.run-settings-summary > div {
+  min-width: 0;
+  padding: 12px 14px;
+  background: #f8faf6;
+}
+.run-settings-summary dt {
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+.run-settings-summary dd {
+  margin: 5px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 .form {
   padding: 25px;
@@ -597,6 +635,10 @@ pre {
 .call-summary span {
   font-size: 10px;
   color: var(--muted);
+}
+.prompt-preview-panel .preview {
+  max-height: calc(100vh - 230px);
+  overflow: auto;
 }
 .banner {
   background: #e8efdf;
@@ -1231,6 +1273,9 @@ footer {
   .model-settings-grid,
   .connection-setup {
     grid-template-columns: 1fr;
+  }
+  .run-settings-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .connection-setup {
     gap: 20px;

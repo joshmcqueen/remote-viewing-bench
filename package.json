@@ -7,6 +7,7 @@
     "dev": "concurrently -k 'pnpm --filter server dev' 'pnpm --filter web dev'",
     "build": "pnpm -r build",
     "start": "pnpm --filter server start",
+    "nuke": "pnpm --filter @rv/shared build && pnpm --filter server nuke",
     "test": "pnpm --filter @rv/shared build && pnpm --filter server test",
     "typecheck": "pnpm --filter @rv/shared build && pnpm -r typecheck",
     "format": "prettier --write apps packages *.json README.md"

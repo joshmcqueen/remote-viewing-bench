@@ -71,6 +71,32 @@ export function RunDetailPage({ run, busy }: { run: Runs; busy: boolean }) {
               Recorded impressions{" "}
               <span className="pill">{generationJobs.length}</span>
             </h2>
+            <dl className="run-settings-summary">
+              <div>
+                <dt>Temperature</dt>
+                <dd>
+                  {detail.settings?.temperature == null
+                    ? "Provider default"
+                    : detail.settings.temperature}
+                </dd>
+              </div>
+              <div>
+                <dt>Repetitions</dt>
+                <dd>{detail.settings?.repetitions ?? "—"}</dd>
+              </div>
+              <div>
+                <dt>Output limit</dt>
+                <dd>
+                  {detail.settings?.outputTokenLimit
+                    ? `${Number(detail.settings.outputTokenLimit).toLocaleString()} tokens`
+                    : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt>Models</dt>
+                <dd>{detail.settings?.models?.length ?? "—"}</dd>
+              </div>
+            </dl>
             <details>
               <summary>
                 Shared messages · prompt version #{detail.prompt_version_id}

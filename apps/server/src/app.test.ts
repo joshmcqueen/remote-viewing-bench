@@ -72,7 +72,6 @@ async function fixture(
     models: models.map((m) => m.id),
     repetitions: 1,
     temperature: null,
-    maxTokens: 2048,
   };
   const wait = async (id: number) => {
     for (let n = 0; n < 100; n++) {
@@ -310,22 +309,28 @@ test("full experiment, immutable prompts, identical payloads, reveal and evaluat
     };
   });
   try {
+    await f.call("/settings", { outputTokenLimit: 6123 }, "PUT");
     const id = (await f.call("/runs", f.input)).data.id;
     let r = await f.wait(id);
     assert.equal(r.jobs.length, 2);
     assert.deepEqual(calls[0].messages, calls[1].messages);
     assert.equal(calls[0].messages[0].role, "system");
     assert.ok(
-      calls[0].messages[0].content.includes("Record concise impressions"),
+      calls[0].messages[0].content.includes(
+        "Produce a fresh, imaginative, and testable session report",
+      ),
     );
     assert.deepEqual(calls[0].messages[1], {
       role: "user",
-      content: "Your task is to remote view the target RV-001.",
+      content:
+        "Begin a new independent session for target RV-001.\n\nApply the target scope exactly as stated. Capture the first coherent pattern, develop it into specific testable details, and finish with ranked guesses and one final lock-in.",
     });
     assert.equal(calls[0].tool_choice, "none");
     assert.deepEqual(calls[0].plugins, []);
     assert.equal(calls[0].tools, undefined);
     assert.equal(calls[0].temperature, undefined);
+    assert.equal(calls[0].max_tokens, 6123);
+    assert.equal(r.settings.outputTokenLimit, 6123);
     assert.deepEqual(
       {
         target_id: traceMetadata[0].target_id,
@@ -377,9 +382,12 @@ test("full experiment, immutable prompts, identical payloads, reveal and evaluat
     await f.call(`/runs/${id}/evaluate`, evaluation);
     r = await f.wait(id);
     assert.equal(calls[2].messages[0].role, "system");
+    assert.equal(calls[2].max_tokens, 6123);
     assert.equal(calls[2].messages[1].role, "user");
     assert.ok(
-      calls[2].messages[0].content.includes("Return only the required JSON"),
+      calls[2].messages[0].content.includes(
+        "Return only JSON matching the required schema",
+      ),
     );
     assert.equal(r.jobs.filter((j: any) => j.result?.score === 5).length, 2);
     assert.ok(
@@ -564,6 +572,7 @@ test("configuration missing blocks inference, settings persist, foreign origins 
   try {
     assert.equal((await f.call("/runs", f.input)).status, 400);
     assert.equal((await f.call("/runs")).status, 200);
+    assert.equal((await f.call("/settings")).data.outputTokenLimit, 5000);
     const c = (await f.call("/config")).data;
     assert.deepEqual(Object.keys(c).sort(), [
       "langsmith",
@@ -575,13 +584,14 @@ test("configuration missing blocks inference, settings persist, foreign origins 
       {
         models: ["test/one"],
         repetitions: 2,
-        maxTokens: 3000,
+        outputTokenLimit: 3000,
         temperature: 0.5,
         evaluatorModel: "test/one",
       },
       "PUT",
     );
     assert.equal((await f.call("/settings")).data.repetitions, 2);
+    assert.equal((await f.call("/settings")).data.outputTokenLimit, 3000);
     assert.equal((await f.call("/settings")).data.autoRetry, true);
     assert.equal((await f.call("/settings")).data.autoRetryDelaySeconds, 10);
     const bad = await f.app.inject({

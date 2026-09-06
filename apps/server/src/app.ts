@@ -101,6 +101,10 @@ export function buildApp(
     );
   const run = (id: number) =>
     requireRow(row("SELECT * FROM runs WHERE id=?", id));
+  const workspaceSettings = () =>
+    Settings.parse(
+      JSON.parse(row("SELECT value FROM settings WHERE id=1")?.value || "{}"),
+    );
   const hasActive = (id: number) =>
     !!row(`SELECT 1 FROM jobs WHERE run_id=? AND status IN ${active}`, id);
   const hasActiveGeneration = (id: number) =>
@@ -347,11 +351,7 @@ export function buildApp(
       return reply.code(403).send({ error: "Origin not allowed" });
   });
   app.get("/api/config", async () => config());
-  app.get("/api/settings", async () =>
-    Settings.parse(
-      JSON.parse(row("SELECT value FROM settings WHERE id=1")?.value || "{}"),
-    ),
-  );
+  app.get("/api/settings", async () => workspaceSettings());
   app.put("/api/settings", async (req) => {
     const s = Settings.parse(req.body);
     db.prepare("INSERT OR REPLACE INTO settings VALUES(1,?)").run(
@@ -508,6 +508,7 @@ export function buildApp(
   app.post("/api/runs", async (req) => {
     ready();
     const input = RunInput.parse(req.body);
+    const globalSettings = workspaceSettings();
     if (!input.models.length) fail("Select at least one model");
     const models = [...new Set(input.models)];
     models.forEach(checkModel);
@@ -534,7 +535,11 @@ export function buildApp(
             scope.description,
             p.id,
             JSON.stringify(messages),
-            JSON.stringify({ ...input, models }),
+            JSON.stringify({
+              ...input,
+              models,
+              outputTokenLimit: globalSettings.outputTokenLimit,
+            }),
           ).lastInsertRowid,
       );
       for (const model of models)
@@ -542,7 +547,7 @@ export function buildApp(
           saveJob(id, "generation", model, n, {
             model,
             messages,
-            max_tokens: input.maxTokens,
+            max_tokens: globalSettings.outputTokenLimit,
             ...(input.temperature === null
               ? {}
               : { temperature: input.temperature }),
@@ -551,7 +556,7 @@ export function buildApp(
             provider: { require_parameters: true },
           });
       db.prepare("INSERT OR REPLACE INTO settings VALUES(1,?)").run(
-        JSON.stringify(Settings.parse({ ...input, models })),
+        JSON.stringify(Settings.parse({ ...globalSettings, ...input, models })),
       );
       return id;
     })();
@@ -704,6 +709,7 @@ export function buildApp(
       )
         fail("Choose a vision-capable evaluator for this image");
       const p = version(input.promptVersionId, "evaluator");
+      const outputTokenLimit = workspaceSettings().outputTokenLimit;
       const sources = all(
         "SELECT * FROM jobs WHERE run_id=? AND kind='generation' AND status='complete'",
         id,
@@ -750,7 +756,7 @@ export function buildApp(
                 },
                 { role: "user", content },
               ],
-              max_tokens: 4096,
+              max_tokens: outputTokenLimit,
               tool_choice: "none",
               plugins: [],
               provider: { require_parameters: true },

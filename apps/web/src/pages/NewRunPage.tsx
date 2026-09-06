@@ -102,22 +102,11 @@ export function NewRunPage({
             </h2>
             {modelPicker}
           </section>
-        </div>
-        <div>
           <section className="panel form">
-            <h2>Prompt preview</h2>
-            <pre className="preview">
-              {selectedPrompt
-                ? promptPreview
-                    .map(
-                      (message) =>
-                        `${message.role.toUpperCase()}\n${message.content}`,
-                    )
-                    .join("\n\n")
-                : "Create an experiment prompt first."}
-            </pre>
-            <div className="divider" />
-            <div className="row">
+            <h2>
+              <em>03</em> Run settings
+            </h2>
+            <div className="row run-setting-fields">
               <label>
                 Repetitions
                 <input
@@ -134,44 +123,32 @@ export function NewRunPage({
                 />
               </label>
               <label>
-                Output limit
+                Temperature
                 <input
                   type="number"
-                  min="128"
-                  max="32000"
-                  value={prefs.maxTokens}
+                  min="0"
+                  max="2"
+                  step="0.1"
+                  placeholder="Provider default"
+                  value={prefs.temperature ?? ""}
                   onChange={(e) =>
                     setPrefs({
                       ...prefs,
-                      maxTokens: Number(e.target.value),
+                      temperature:
+                        e.target.value === "" ? null : Number(e.target.value),
                     })
                   }
                 />
               </label>
             </div>
-            <label>
-              Temperature
-              <input
-                type="number"
-                min="0"
-                max="2"
-                step="0.1"
-                placeholder="Provider default"
-                value={prefs.temperature ?? ""}
-                onChange={(e) =>
-                  setPrefs({
-                    ...prefs,
-                    temperature:
-                      e.target.value === "" ? null : Number(e.target.value),
-                  })
-                }
-              />
-            </label>
             <div className="call-summary">
               <strong>
                 {prefs.models.length * prefs.repetitions} inference calls
               </strong>
-              <span>3 concurrent · tools & browsing disabled</span>
+              <span>
+                3 concurrent · {prefs.outputTokenLimit.toLocaleString()} token
+                global output limit · tools & browsing disabled
+              </span>
             </div>
             {(!config.openrouter || (config.tracing && !config.langsmith)) && (
               <p className="warning">
@@ -187,6 +164,21 @@ export function NewRunPage({
             >
               {busy ? "Please wait…" : "Start experiment →"}
             </button>
+          </section>
+        </div>
+        <div>
+          <section className="panel form prompt-preview-panel">
+            <h2>Prompt preview</h2>
+            <pre className="preview">
+              {selectedPrompt
+                ? promptPreview
+                    .map(
+                      (message) =>
+                        `${message.role.toUpperCase()}\n${message.content}`,
+                    )
+                    .join("\n\n")
+                : "Create an experiment prompt first."}
+            </pre>
           </section>
         </div>
       </div>

@@ -149,11 +149,30 @@ export function SettingsPage({
         <section className="panel settings-section">
           <div className="settings-section-heading">
             <div>
-              <h2>Automatic retries</h2>
-              <p>Control how temporary provider errors are handled.</p>
+              <h2>Inference defaults</h2>
+              <p>Set limits and control how provider errors are handled.</p>
             </div>
           </div>
           <div className="settings-section-body">
+            <label className="settings-field compact-settings-field">
+              <span>Global output token limit</span>
+              <input
+                type="number"
+                min="128"
+                max="32000"
+                value={prefs.outputTokenLimit}
+                onChange={(e) =>
+                  setPrefs({
+                    ...prefs,
+                    outputTokenLimit: Number(e.target.value),
+                  })
+                }
+              />
+              <small>
+                Applied to every new generation and evaluation request.
+              </small>
+            </label>
+            <div className="divider" />
             <label className="retry-toggle">
               <input
                 type="checkbox"
@@ -205,8 +224,8 @@ export function SettingsPage({
             </div>
             <div className="settings-actions">
               <p className="muted">
-                New runs use these values. Manual and automatic retries replace
-                the failed item and increase its attempt number.
+                Saves model choices, evaluator, output limit, and retry
+                defaults. Runs keep their own historical generation snapshot.
               </p>
               <button className="primary" disabled={busy} onClick={savePrefs}>
                 Save preferences

@@ -12,7 +12,7 @@ export function useWorkspace({ setError, setNotice, action }: Feedback) {
     models: [],
     repetitions: 1,
     temperature: null,
-    maxTokens: 2048,
+    outputTokenLimit: 5000,
     evaluatorModel: "",
     autoRetry: true,
     autoRetryDelaySeconds: 10,
