@@ -507,6 +507,21 @@ export function buildApp(
       })),
     };
   });
+  app.delete<{ Params: { id: string } }>("/api/runs/:id", async (req) => {
+    const id = Number(req.params.id);
+    run(id);
+    const jobs = all("SELECT id FROM jobs WHERE run_id=?", id);
+    for (const job of jobs) controllers.get(job.id)?.abort();
+    return db.transaction(() => {
+      // Break self-references before removing a run's job attempts.
+      db.prepare("UPDATE jobs SET source_id=NULL WHERE run_id=?").run(id);
+      db.prepare("DELETE FROM jobs WHERE run_id=?").run(id);
+      db.prepare("DELETE FROM batches WHERE run_id=?").run(id);
+      db.prepare("DELETE FROM reveals WHERE run_id=?").run(id);
+      db.prepare("DELETE FROM runs WHERE id=?").run(id);
+      return { ok: true };
+    })();
+  });
   app.post<{ Params: { id: string } }>("/api/runs/:id/cancel", async (req) => {
     const id = Number(req.params.id);
     run(id);

@@ -57,6 +57,8 @@ export function App() {
           selectedModelCount={workspace.prefs.models.length}
           onNewRun={() => navigate("New Run")}
           onOpen={run.openRun}
+          onDelete={run.deleteRun}
+          busy={feedback.busy}
         />
       )}
       {view === "New Run" && (

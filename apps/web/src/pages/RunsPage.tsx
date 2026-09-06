@@ -5,11 +5,15 @@ export function RunsPage({
   selectedModelCount,
   onNewRun,
   onOpen,
+  onDelete,
+  busy,
 }: {
   runs: any[];
   selectedModelCount: number;
   onNewRun: () => void;
   onOpen: (id: number) => void;
+  onDelete: (id: number, code: string) => void;
+  busy: boolean;
 }) {
   return (
     <>
@@ -71,24 +75,31 @@ export function RunsPage({
               <span>STATUS</span>
             </div>
             {runs.map((r) => (
-              <button
-                className="run-row"
-                key={r.id}
-                onClick={() => onOpen(r.id)}
-              >
-                <span>
-                  <b>{r.code}</b>
-                  <small>
-                    #{String(r.id).padStart(3, "0")} · {r.scope_name}
-                  </small>
-                </span>
-                <span>
-                  {r.settings.models.length} models{" "}
-                  <small>{r.settings.repetitions} repetition(s)</small>
-                </span>
-                <span>{date(r.created_at)}</span>
-                {<StatusBadge status={r.status} />}
-              </button>
+              <div className="run-entry" key={r.id}>
+                <button className="run-row" onClick={() => onOpen(r.id)}>
+                  <span>
+                    <b>{r.code}</b>
+                    <small>
+                      #{String(r.id).padStart(3, "0")} · {r.scope_name}
+                    </small>
+                  </span>
+                  <span>
+                    {r.settings.models.length} models{" "}
+                    <small>{r.settings.repetitions} repetition(s)</small>
+                  </span>
+                  <span>{date(r.created_at)}</span>
+                  {<StatusBadge status={r.status} />}
+                </button>
+                <button
+                  className="run-delete danger"
+                  aria-label={`Delete run ${r.code}`}
+                  title="Delete run"
+                  disabled={busy}
+                  onClick={() => onDelete(r.id, r.code)}
+                >
+                  Delete
+                </button>
+              </div>
             ))}
           </div>
         )}

@@ -524,6 +524,20 @@ pre {
 .run-row .status {
   justify-self: start;
 }
+.run-entry {
+  position: relative;
+}
+.run-entry .run-row {
+  padding-right: 100px;
+}
+.run-delete {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 7px 10px;
+  font-size: 11px;
+}
 .prompt-item {
   display: flex;
   justify-content: space-between;

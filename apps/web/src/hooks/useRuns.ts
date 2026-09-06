@@ -67,6 +67,18 @@ export function useRuns(
       await api(`/runs/${detail.id}/cancel`, {});
       setDetail(await api(`/runs/${detail.id}`));
     });
+  const deleteRun = (id: number, code: string) => {
+    if (!window.confirm(`Delete run ${code}? This cannot be undone.`)) return;
+    action(async () => {
+      await api(`/runs/${id}`, undefined, "DELETE");
+      setRuns(await api("/runs"));
+      if (detail?.id === id) {
+        setDetail(null);
+        onOpened();
+      }
+      setNotice(`Run ${code} deleted.`);
+    });
+  };
   const saveReveal = () =>
     action(async () => {
       await api(`/runs/${detail.id}/reveal`, {
@@ -116,6 +128,7 @@ export function useRuns(
     compatible,
     retry,
     cancelRun,
+    deleteRun,
     saveReveal,
     evaluate,
     selectImage,

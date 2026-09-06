@@ -233,6 +233,67 @@ test("project scopes can be added, edited, renamed, and deleted", async () => {
     await f.close();
   }
 });
+test("runs and all of their owned records can be deleted", async () => {
+  const f = await fixture();
+  try {
+    const id = (
+      await f.call("/runs", { ...f.input, models: ["test/one"] })
+    ).data.id;
+    await f.wait(id);
+    await f.call(`/runs/${id}/reveal`, {
+      description: "secret red marble",
+      image: png,
+    });
+    await f.call(`/runs/${id}/evaluate`, {
+      model: "test/one",
+      promptVersionId: f.ps.find((p: any) => p.kind === "evaluator").versionId,
+    });
+    await f.wait(id);
+
+    const deleted = await f.call(`/runs/${id}`, undefined, "DELETE");
+    assert.equal(deleted.status, 200);
+    assert.equal((await f.call(`/runs/${id}`)).status, 404);
+    for (const table of ["jobs", "batches", "reveals", "runs"])
+      assert.equal(
+        (f.db.prepare(`SELECT COUNT(*) count FROM ${table}`).get() as any)
+          .count,
+        0,
+      );
+    assert.equal(
+      (await f.call(`/runs/${id}`, undefined, "DELETE")).status,
+      404,
+    );
+  } finally {
+    await f.close();
+  }
+});
+test("deleting an active run aborts its in-flight work", async () => {
+  let aborted = 0;
+  const f = await fixture(
+    async (_payload, signal) =>
+      new Promise((_resolve, reject) => {
+        signal.addEventListener(
+          "abort",
+          () => {
+            aborted++;
+            reject(new Error("aborted"));
+          },
+          { once: true },
+        );
+      }),
+  );
+  try {
+    const id = (
+      await f.call("/runs", { ...f.input, models: ["test/one"] })
+    ).data.id;
+    assert.equal((await f.call(`/runs/${id}`, undefined, "DELETE")).status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(aborted, 1);
+    assert.equal((await f.call(`/runs/${id}`)).status, 404);
+  } finally {
+    await f.close();
+  }
+});
 test("full experiment, immutable prompts, identical payloads, reveal and evaluation snapshots", async () => {
   const calls: any[] = [];
   const traceMetadata: Record<string, unknown>[] = [];

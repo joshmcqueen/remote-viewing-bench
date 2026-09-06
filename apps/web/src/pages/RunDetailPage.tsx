@@ -25,6 +25,7 @@ export function RunDetailPage({ run, busy }: { run: Runs; busy: boolean }) {
     setEvalPrompt,
     evaluators,
     cancelRun,
+    deleteRun,
     saveReveal,
     evaluate,
     selectImage,
@@ -54,6 +55,13 @@ export function RunDetailPage({ run, busy }: { run: Runs; busy: boolean }) {
               Cancel work
             </button>
           )}
+          <button
+            className="danger"
+            disabled={busy}
+            onClick={() => deleteRun(detail.id, detail.code)}
+          >
+            Delete run
+          </button>
         </div>
       </header>
       <div className="columns detail-columns">
