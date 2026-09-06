@@ -325,8 +325,10 @@ test("full experiment, immutable prompts, identical payloads, reveal and evaluat
       content:
         "Begin a new independent session for target RV-001.\n\nApply the target scope exactly as stated. Capture the first coherent pattern, develop it into specific testable details, and finish with ranked guesses and one final lock-in.",
     });
-    assert.equal(calls[0].tool_choice, "none");
-    assert.deepEqual(calls[0].plugins, []);
+    // Omitting tool controls keeps require_parameters from filtering out
+    // otherwise compatible models that do not advertise tool_choice support.
+    assert.equal(calls[0].tool_choice, undefined);
+    assert.equal(calls[0].plugins, undefined);
     assert.equal(calls[0].tools, undefined);
     assert.equal(calls[0].temperature, undefined);
     assert.equal(calls[0].max_tokens, 6123);
@@ -383,6 +385,8 @@ test("full experiment, immutable prompts, identical payloads, reveal and evaluat
     r = await f.wait(id);
     assert.equal(calls[2].messages[0].role, "system");
     assert.equal(calls[2].max_tokens, 6123);
+    assert.equal(calls[2].tool_choice, undefined);
+    assert.equal(calls[2].plugins, undefined);
     assert.equal(calls[2].messages[1].role, "user");
     assert.ok(
       calls[2].messages[0].content.includes(
@@ -472,13 +476,17 @@ test("active reveal blocked; cancellation prevents pending jobs from dispatching
 });
 test("invalid scoring can be replaced by a valid evaluator retry", async () => {
   let valid = false;
-  const f = await fixture(async (p) => ({
-    response: response(
-      p.response_format
-        ? JSON.stringify({ ...score, score: valid ? 5 : 99 })
-        : "red",
-    ),
-  }));
+  const calls: any[] = [];
+  const f = await fixture(async (p) => {
+    calls.push(p);
+    return {
+      response: response(
+        p.response_format
+          ? JSON.stringify({ ...score, score: valid ? 5 : 99 })
+          : "red",
+      ),
+    };
+  });
   try {
     const id = (await f.call("/runs", { ...f.input, models: ["test/one"] }))
       .data.id;
@@ -492,6 +500,14 @@ test("invalid scoring can be replaced by a valid evaluator retry", async () => {
     const bad = r.jobs[1];
     assert.equal(bad.status, "error");
     assert.ok(bad.response);
+    f.db.prepare("UPDATE jobs SET payload=? WHERE id=?").run(
+      JSON.stringify({
+        ...bad.payload,
+        tool_choice: "none",
+        plugins: [],
+      }),
+      bad.id,
+    );
     valid = true;
     await f.call(`/jobs/${bad.id}/retry`, {});
     r = await f.wait(id);
@@ -499,6 +515,10 @@ test("invalid scoring can be replaced by a valid evaluator retry", async () => {
     assert.equal(r.jobs[1].id, bad.id);
     assert.equal(r.jobs[1].attempt, 2);
     assert.equal(r.jobs[1].result.score, 5);
+    assert.equal(calls[2].tool_choice, undefined);
+    assert.equal(calls[2].plugins, undefined);
+    assert.equal(r.jobs[1].payload.tool_choice, undefined);
+    assert.equal(r.jobs[1].payload.plugins, undefined);
   } finally {
     await f.close();
   }

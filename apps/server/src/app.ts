@@ -154,6 +154,13 @@ export function buildApp(
             : null,
         }
       : null;
+  const withoutToolParameters = (payload: any) => {
+    const clean = { ...payload };
+    delete clean.tools;
+    delete clean.tool_choice;
+    delete clean.plugins;
+    return clean;
+  };
   const saveJob = (
     runId: number,
     kind: string,
@@ -174,7 +181,7 @@ export function buildApp(
           kind,
           model,
           repetition,
-          JSON.stringify(payload),
+          JSON.stringify(withoutToolParameters(payload)),
           batchId,
           sourceId,
           attempt,
@@ -193,15 +200,20 @@ export function buildApp(
     );
   };
   const beginRetry = (id: number, expectedStatus: string) => {
+    const original = requireRow(row("SELECT payload FROM jobs WHERE id=?", id));
     const result = db
       .prepare(
         `UPDATE jobs
-         SET attempt=attempt+1,status='queued',response=NULL,result=NULL,error=NULL,
+         SET attempt=attempt+1,status='queued',payload=?,response=NULL,result=NULL,error=NULL,
              trace_id=NULL,trace_url=NULL,trace_error=NULL,
              created_at=CURRENT_TIMESTAMP,finished_at=NULL
          WHERE id=? AND status=?`,
       )
-      .run(id, expectedStatus);
+      .run(
+        JSON.stringify(withoutToolParameters(JSON.parse(original.payload))),
+        id,
+        expectedStatus,
+      );
     if (result.changes) pump();
     return !!result.changes;
   };
@@ -551,8 +563,6 @@ export function buildApp(
             ...(input.temperature === null
               ? {}
               : { temperature: input.temperature }),
-            tool_choice: "none",
-            plugins: [],
             provider: { require_parameters: true },
           });
       db.prepare("INSERT OR REPLACE INTO settings VALUES(1,?)").run(
@@ -757,8 +767,6 @@ export function buildApp(
                 { role: "user", content },
               ],
               max_tokens: outputTokenLimit,
-              tool_choice: "none",
-              plugins: [],
               provider: { require_parameters: true },
               response_format: {
                 type: "json_schema",
