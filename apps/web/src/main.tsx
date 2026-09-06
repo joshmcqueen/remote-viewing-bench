@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   experimentMessages,
   eligibleModel,
@@ -35,6 +37,78 @@ function generateTargetCode() {
     .toString()
     .padStart(8, "0");
   return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+}
+function MarkdownResponse({ children }: { children: string }) {
+  return (
+    <div className="markdown-response">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{children}</ReactMarkdown>
+    </div>
+  );
+}
+function CallDetails({
+  jobId,
+  response,
+  snapshot,
+}: {
+  jobId: number;
+  response?: string;
+  snapshot: unknown;
+}) {
+  const [activeTab, setActiveTab] = useState<"response" | "raw" | null>(
+    null,
+  );
+  const panelId = `call-details-${jobId}`;
+
+  return (
+    <div className={`call-details${activeTab ? " open" : ""}`}>
+      <div className="call-detail-tabs" role="tablist" aria-label="Call details">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "response"}
+          aria-controls={panelId}
+          className={activeTab === "response" ? "active" : ""}
+          disabled={!response}
+          onClick={() => setActiveTab("response")}
+        >
+          Response
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "raw"}
+          aria-controls={panelId}
+          className={activeTab === "raw" ? "active" : ""}
+          onClick={() => setActiveTab("raw")}
+        >
+          Raw JSON
+        </button>
+        {activeTab && (
+          <button
+            type="button"
+            className="call-detail-collapse"
+            onClick={() => setActiveTab(null)}
+          >
+            Hide details ↑
+          </button>
+        )}
+      </div>
+      {activeTab && (
+        <div
+          className="call-detail-panel"
+          id={panelId}
+          role="tabpanel"
+          tabIndex={0}
+        >
+          {activeTab === "response" && response ? (
+            <MarkdownResponse>{response}</MarkdownResponse>
+          ) : (
+            <pre className="raw-json">{JSON.stringify(snapshot, null, 2)}</pre>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 function App() {
   const [view, setView] = useState("Runs"),
@@ -312,7 +386,7 @@ function App() {
       Retry as new attempt
     </button>
   );
-  function jobFooter(j: any) {
+  function jobFooter(j: any, showSnapshot = true) {
     return (
       <>
         <div className="row meta">
@@ -330,16 +404,18 @@ function App() {
         {["error", "interrupted", "cancelled"].includes(j.status) &&
           (j.kind === "evaluation" || !detail.reveal) &&
           retry(j)}
-        <details>
-          <summary>Request & response snapshot</summary>
-          <pre>
-            {JSON.stringify(
-              { request: j.payload, response: j.response },
-              null,
-              2,
-            )}
-          </pre>
-        </details>
+        {showSnapshot && (
+          <details>
+            <summary>Request & response snapshot</summary>
+            <pre>
+              {JSON.stringify(
+                { request: j.payload, response: j.response },
+                null,
+                2,
+              )}
+            </pre>
+          </details>
+        )}
       </>
     );
   }
@@ -1342,11 +1418,8 @@ function App() {
                         </h3>
                         {status(j.status)}
                       </div>
-                      {j.response?.choices?.[0]?.message?.content ? (
-                        <pre className="response">
-                          {j.response.choices[0].message.content}
-                        </pre>
-                      ) : (
+                      {jobFooter(j, false)}
+                      {!j.response?.choices?.[0]?.message?.content && (
                         <p className="muted">
                           {j.status === "running"
                             ? "Awaiting model response…"
@@ -1355,7 +1428,11 @@ function App() {
                               : "No text response recorded."}
                         </p>
                       )}
-                      {jobFooter(j)}
+                      <CallDetails
+                        jobId={j.id}
+                        response={j.response?.choices?.[0]?.message?.content}
+                        snapshot={{ request: j.payload, response: j.response }}
+                      />
                     </article>
                   ))}
                 </section>

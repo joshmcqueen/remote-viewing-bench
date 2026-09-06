@@ -758,18 +758,181 @@ pre {
   margin-top: 22px;
 }
 .job {
-  border-top: 1px solid var(--line);
-  padding: 22px 0;
+  margin: 14px 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
 }
 .job:last-child {
-  padding-bottom: 0;
+  margin-bottom: 0;
 }
-.response {
-  font-family: inherit;
+.job > .meta {
+  margin-top: 15px;
+}
+.call-details {
+  margin: 16px 0 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.call-detail-tabs {
+  display: flex;
+  align-items: center;
+  background: #fafbf8;
+}
+.call-detail-tabs > button {
+  position: relative;
+  min-width: 108px;
+  padding: 12px 15px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: #465743;
+  font-size: 12px;
+  font-weight: 600;
+}
+.call-detail-tabs > button:hover {
+  background: #f3f6ef;
+}
+.call-detail-tabs > button.active {
+  background: #fff;
+  color: var(--green);
+}
+.call-detail-tabs > button.active::after {
+  content: "";
+  position: absolute;
+  inset: auto 13px -1px;
+  height: 2px;
+  background: #78965d;
+}
+.call-detail-tabs > button:disabled {
+  cursor: default;
+}
+.call-detail-tabs > .call-detail-collapse {
+  min-width: auto;
+  margin-left: auto;
+  border-right: 0;
+  border-left: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+}
+.call-detail-panel {
+  max-height: min(680px, 65vh);
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  background: #fff;
+  outline-offset: -3px;
+}
+.markdown-response {
+  padding: 18px;
   font-size: 13px;
   color: #495544;
-  line-height: 1.8;
-  margin: 20px 0;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.markdown-response > :first-child {
+  margin-top: 0;
+}
+.markdown-response > :last-child {
+  margin-bottom: 0;
+}
+.markdown-response h1,
+.markdown-response h2,
+.markdown-response h3,
+.markdown-response h4 {
+  margin: 1.5em 0 0.55em;
+  color: #2f4437;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: normal;
+}
+.markdown-response h1 {
+  font-size: 18px;
+}
+.markdown-response h2 {
+  font-size: 16px;
+}
+.markdown-response p {
+  margin: 0.8em 0;
+  font-size: inherit;
+  line-height: inherit;
+}
+.markdown-response ul,
+.markdown-response ol {
+  margin: 0.8em 0;
+  padding-left: 24px;
+}
+.markdown-response li + li {
+  margin-top: 0.35em;
+}
+.markdown-response blockquote {
+  margin: 1em 0;
+  padding: 1px 14px;
+  border-left: 3px solid #b8c5a9;
+  background: #f7f9f4;
+  color: #62715d;
+}
+.markdown-response code {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #eef2ea;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.88em;
+}
+.call-details .markdown-response pre {
+  max-height: 360px;
+  margin: 1em 0;
+  padding: 13px 15px;
+  overflow: auto;
+  border-radius: 6px;
+  background: #26332d;
+  color: #edf3e9;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+.markdown-response pre code {
+  padding: 0;
+  background: none;
+  color: inherit;
+  font-size: 11px;
+}
+.markdown-response table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  margin: 1em 0;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.markdown-response th,
+.markdown-response td {
+  padding: 7px 10px;
+  border: 1px solid #dce3d8;
+  text-align: left;
+}
+.markdown-response th {
+  background: #f1f5ed;
+}
+.markdown-response hr {
+  margin: 1.4em 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.markdown-response img {
+  max-width: 100%;
+  border-radius: 6px;
+}
+.raw-json {
+  margin: 0;
+  padding: 18px;
+  background: #f7f8f4;
+  color: #4c5b4a;
+  white-space: pre;
+  overflow-wrap: normal;
 }
 .meta {
   font-size: 10px;
@@ -938,6 +1101,17 @@ footer {
   }
   .form {
     padding: 18px;
+  }
+  .job {
+    padding: 15px;
+  }
+  .call-detail-tabs > button {
+    min-width: 0;
+    flex: 1;
+    padding-inline: 10px;
+  }
+  .call-detail-tabs > .call-detail-collapse {
+    flex: 0 1 auto;
   }
   .row {
     flex-wrap: wrap;
