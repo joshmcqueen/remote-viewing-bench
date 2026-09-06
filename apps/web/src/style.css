@@ -1387,6 +1387,7 @@ pre {
   cursor: default;
 }
 .call-detail-panel {
+  position: relative;
   max-height: min(680px, 65vh);
   margin-top: 8px;
   overflow: auto;
@@ -1396,23 +1397,17 @@ pre {
   outline-offset: -3px;
 }
 .call-detail-panel-actions {
-  position: sticky;
-  top: 0;
+  position: absolute;
+  top: 10px;
+  right: 12px;
   z-index: 1;
-  display: flex;
-  justify-content: flex-end;
-  padding: 10px 12px 0;
-  background: inherit;
 }
 .call-detail-copy {
   padding: 6px 9px;
+  background: rgba(255, 255, 255, 0.94);
   color: #5f705b;
   font-size: 10px;
   font-weight: 600;
-}
-.call-detail-panel-actions + .markdown-response,
-.call-detail-panel-actions + .raw-json {
-  padding-top: 8px;
 }
 .markdown-response {
   padding: 18px;
@@ -1778,6 +1773,9 @@ html[data-theme="dark"] .call-detail-controls > button {
 html[data-theme="dark"] .call-detail-controls > button:hover,
 html[data-theme="dark"] .call-detail-controls > button.active {
   background: #26362c;
+}
+html[data-theme="dark"] .call-detail-copy {
+  background: rgba(25, 35, 29, 0.94);
 }
 html[data-theme="dark"] .model {
   border-bottom-color: #2c3d32;
