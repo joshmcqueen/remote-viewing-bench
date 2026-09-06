@@ -1,4 +1,19 @@
-import type { ReactNode } from "react";
+import { useLayoutEffect, useState, type ReactNode } from "react";
+
+type Theme = "light" | "dark";
+
+const THEME_STORAGE_KEY = "remote-view-bench-theme";
+
+function getSavedTheme(): Theme {
+  try {
+    return window.localStorage.getItem(THEME_STORAGE_KEY) === "dark"
+      ? "dark"
+      : "light";
+  } catch {
+    return "light";
+  }
+}
+
 export function AppLayout({
   view,
   navigate,
@@ -16,6 +31,19 @@ export function AppLayout({
   onDismissError: () => void;
   children: ReactNode;
 }) {
+  const [theme, setTheme] = useState<Theme>(getSavedTheme);
+
+  useLayoutEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch {
+      // The selected theme still applies when browser storage is unavailable.
+    }
+  }, [theme]);
+
+  const darkMode = theme === "dark";
+
   return (
     <div className="shell">
       <aside>
@@ -55,6 +83,22 @@ export function AppLayout({
             </button>
           ))}
         </nav>
+        <button
+          type="button"
+          className="theme-toggle"
+          role="switch"
+          aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+          aria-checked={darkMode}
+          onClick={() => setTheme(darkMode ? "light" : "dark")}
+        >
+          <span className="theme-toggle-icon" aria-hidden="true">
+            {darkMode ? "☀" : "☾"}
+          </span>
+          <span>Dark mode</span>
+          <span className="theme-toggle-switch" aria-hidden="true">
+            <span />
+          </span>
+        </button>
         <div className="side-bottom">
           <span className="local-dot" /> Local workspace
           <small>
