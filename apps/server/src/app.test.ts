@@ -313,6 +313,8 @@ test("full experiment, immutable prompts, identical payloads, reveal and evaluat
     const id = (await f.call("/runs", f.input)).data.id;
     let r = await f.wait(id);
     assert.equal(r.jobs.length, 2);
+    assert.ok(r.jobs.every((job: any) => job.started_at));
+    assert.ok(r.jobs.every((job: any) => job.finished_at));
     assert.deepEqual(calls[0].messages, calls[1].messages);
     assert.equal(calls[0].messages[0].role, "system");
     assert.ok(

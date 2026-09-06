@@ -60,6 +60,16 @@ test("nuke recreates a blank database with only starter scopes and prompts", () 
         .all(),
       promptSeeds.map((prompt) => ({ ...prompt })),
     );
+    assert.deepEqual(
+      after.prepare("SELECT version FROM migrations ORDER BY version").all(),
+      [{ version: 1 }, { version: 2 }],
+    );
+    assert.ok(
+      after
+        .prepare("PRAGMA table_info(jobs)")
+        .all()
+        .some((column: any) => column.name === "started_at"),
+    );
     after.close();
   } finally {
     rmSync(dir, { recursive: true });

@@ -1,9 +1,34 @@
+import { useEffect, useState } from "react";
 import type { Runs } from "../hooks/useRuns";
-import { date } from "../lib/format";
+import {
+  aggregateJobMetrics,
+  date,
+  formatCost,
+  formatTokens,
+} from "../lib/format";
 import { StatusBadge } from "../components/StatusBadge";
 import { CallDetails } from "../components/CallDetails";
 import { JobFooter } from "../components/JobFooter";
+import { RunDashboard } from "../components/RunDashboard";
+import { EvaluationResult } from "../components/EvaluationResult";
 import { promptOptions } from "../lib/prompt-options";
+
+function SectionTelemetry({ jobs }: { jobs: any[] }) {
+  const metrics = aggregateJobMetrics(jobs);
+  if (!jobs.length) return null;
+  return (
+    <div className="section-telemetry">
+      <span>{jobs.length} calls</span>
+      <span>
+        {metrics.usageCount
+          ? `${formatTokens(metrics.totalTokens)} tokens`
+          : "Tokens —"}
+      </span>
+      <span>{metrics.costCount ? formatCost(metrics.cost) : "Cost —"}</span>
+    </div>
+  );
+}
+
 export function RunDetailPage({ run, busy }: { run: Runs; busy: boolean }) {
   const {
     detail,
@@ -30,6 +55,27 @@ export function RunDetailPage({ run, busy }: { run: Runs; busy: boolean }) {
     evaluate,
     selectImage,
   } = run;
+  const [editingReveal, setEditingReveal] = useState(!detail.reveal);
+  useEffect(
+    () => setEditingReveal(!detail.reveal),
+    [detail.id, detail.reveal?.id],
+  );
+  const selectedBatchData = detail.batches.find(
+    (batch: any) => batch.id === selectedBatch,
+  );
+  const historicalReveal =
+    selectedBatchData?.reveal?.id !== detail.reveal?.id
+      ? selectedBatchData?.reveal
+      : null;
+  const evaluatedScores = evaluationJobs
+    .map((job: any) => job.result?.score)
+    .filter((score: unknown): score is number => typeof score === "number");
+  const averageScore = evaluatedScores.length
+    ? evaluatedScores.reduce(
+        (total: number, score: number) => total + score,
+        0,
+      ) / evaluatedScores.length
+    : null;
   return (
     <>
       <button className="back" onClick={close}>
@@ -64,13 +110,17 @@ export function RunDetailPage({ run, busy }: { run: Runs; busy: boolean }) {
           </button>
         </div>
       </header>
+      <RunDashboard detail={detail} jobs={detail.jobs} />
       <div className="columns detail-columns">
         <div>
           <section className="panel form">
-            <h2>
-              Recorded impressions{" "}
-              <span className="pill">{generationJobs.length}</span>
-            </h2>
+            <div className="results-section-heading">
+              <h2>
+                Recorded impressions{" "}
+                <span className="pill">{generationJobs.length}</span>
+              </h2>
+              <SectionTelemetry jobs={generationJobs} />
+            </div>
             <dl className="run-settings-summary">
               <div>
                 <dt>Temperature</dt>
@@ -146,8 +196,17 @@ export function RunDetailPage({ run, busy }: { run: Runs; busy: boolean }) {
             ))}
           </section>
           <section className="panel form">
-            <div className="row spread">
-              <h2>Evaluations</h2>
+            <div className="results-section-heading evaluation-heading">
+              <div>
+                <h2>Evaluations</h2>
+                {averageScore != null && (
+                  <p className="score-summary">
+                    <b>{averageScore.toFixed(1)}</b> average · range{" "}
+                    {Math.min(...evaluatedScores)}–
+                    {Math.max(...evaluatedScores)}
+                  </p>
+                )}
+              </div>
               {detail.batches.length > 0 && (
                 <select
                   aria-label="Evaluation batch"
@@ -162,24 +221,25 @@ export function RunDetailPage({ run, busy }: { run: Runs; busy: boolean }) {
                 </select>
               )}
             </div>
-            {detail.batches.find((b: any) => b.id === selectedBatch) && (
-              <details>
-                <summary>Target evidence used for this batch</summary>
-                <p>
-                  {
-                    detail.batches.find((b: any) => b.id === selectedBatch)
-                      .reveal.description
-                  }
-                </p>
-                {detail.batches.find((b: any) => b.id === selectedBatch).reveal
-                  .image && (
+            <div className="evaluation-batch-meta">
+              <SectionTelemetry jobs={evaluationJobs} />
+              {selectedBatchData && (
+                <span className="reveal-provenance">
+                  Evaluated against reveal #{selectedBatchData.reveal.id}
+                </span>
+              )}
+            </div>
+            {historicalReveal && (
+              <details className="historical-reveal">
+                <summary>
+                  This batch used an earlier target reveal · View it
+                </summary>
+                <p>{historicalReveal.description}</p>
+                {historicalReveal.image && (
                   <img
                     className="target-image"
-                    alt="Evaluation target snapshot"
-                    src={
-                      detail.batches.find((b: any) => b.id === selectedBatch)
-                        .reveal.image
-                    }
+                    alt="Historical evaluation target"
+                    src={historicalReveal.image}
                   />
                 )}
               </details>
@@ -190,109 +250,117 @@ export function RunDetailPage({ run, busy }: { run: Runs; busy: boolean }) {
                 impressions.
               </p>
             )}
-            {evaluationJobs.map((j: any) => (
-              <article className="job" key={j.id}>
-                <div className="row spread">
-                  <h3>
-                    {
-                      generationJobs.find((g: any) => g.id === j.source_id)
-                        ?.model
-                    }
-                    <small>
-                      Response #{j.source_id} · judged by {j.model}
-                    </small>
-                  </h3>
-                  {j.result ? (
-                    <span className="score">
-                      {j.result.score}
-                      <small>/ 7</small>
-                    </span>
-                  ) : (
-                    <StatusBadge status={j.status} />
-                  )}
-                </div>
-                {j.result && (
-                  <>
-                    <p>{j.result.rationale}</p>
-                    {j.result.observations.map((o: any, i: number) => (
-                      <div className="observation" key={i}>
-                        <div className="row spread">
-                          <b>{o.attribute}</b>
-                          <span className={`verdict ${o.verdict}`}>
-                            {o.verdict}
-                          </span>
-                        </div>
-                        <blockquote>{o.responseEvidence}</blockquote>
-                        <p>
-                          <b>Target:</b> {o.targetEvidence}
-                        </p>
-                        <p>{o.explanation}</p>
-                      </div>
-                    ))}
-                  </>
-                )}
-                {
-                  <JobFooter
-                    job={j}
-                    canRetry={j.kind === "evaluation" || !detail.reveal}
-                    busy={busy}
-                    onRetry={retry}
-                  />
-                }
-              </article>
-            ))}
+            <div className="evaluation-list">
+              {evaluationJobs.map((j: any) => (
+                <EvaluationResult
+                  key={j.id}
+                  job={j}
+                  sourceModel={
+                    generationJobs.find((g: any) => g.id === j.source_id)?.model
+                  }
+                  canRetry={j.kind === "evaluation" || !detail.reveal}
+                  busy={busy}
+                  onRetry={retry}
+                />
+              ))}
+            </div>
           </section>
         </div>
-        <div>
+        <div className="detail-rail">
           <section className="panel form">
-            <h2>Target reveal</h2>
-            <label>
-              Description
-              <textarea
-                rows={5}
-                disabled={activeGeneration}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe the actual target…"
-              />
-            </label>
-            <label>
-              Optional target photo
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                disabled={activeGeneration}
-                onChange={(e) => {
-                  selectImage(e.target.files?.[0]);
-                }}
-              />
-            </label>
-            {image && (
-              <>
-                <img
-                  className="target-image"
-                  src={image}
-                  alt="Target evidence"
-                />
+            <div className="row spread target-heading">
+              <h2>Target reveal</h2>
+              {detail.reveal && !editingReveal && (
                 <button
-                  disabled={activeGeneration}
-                  onClick={() => setImage(null)}
+                  className="text-button"
+                  type="button"
+                  onClick={() => setEditingReveal(true)}
                 >
-                  Remove image
+                  Edit correction
                 </button>
+              )}
+            </div>
+            {detail.reveal && !editingReveal ? (
+              <div className="target-summary">
+                <div className="target-summary-label">
+                  Reveal #{detail.reveal.id}
+                </div>
+                <p>{detail.reveal.description}</p>
+                {detail.reveal.image && (
+                  <img
+                    className="target-image"
+                    src={detail.reveal.image}
+                    alt="Target evidence"
+                  />
+                )}
+              </div>
+            ) : (
+              <>
+                <label>
+                  Description
+                  <textarea
+                    rows={5}
+                    disabled={activeGeneration}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Describe the actual target…"
+                  />
+                </label>
+                <label>
+                  Optional target photo
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    disabled={activeGeneration}
+                    onChange={(e) => {
+                      selectImage(e.target.files?.[0]);
+                    }}
+                  />
+                </label>
+                {image && (
+                  <>
+                    <img
+                      className="target-image"
+                      src={image}
+                      alt="Target evidence"
+                    />
+                    <button
+                      disabled={activeGeneration}
+                      onClick={() => setImage(null)}
+                    >
+                      Remove image
+                    </button>
+                  </>
+                )}
+                <p className="muted">
+                  {activeGeneration
+                    ? "Available when all generation requests have ended."
+                    : "Corrections are saved separately. Earlier evaluation evidence remains intact."}
+                </p>
+                <div className="row reveal-actions">
+                  <button
+                    disabled={busy || activeGeneration || !description.trim()}
+                    onClick={saveReveal}
+                  >
+                    {detail.reveal
+                      ? "Save target correction"
+                      : "Save target reveal"}
+                  </button>
+                  {detail.reveal && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDescription(detail.reveal.description);
+                        setImage(detail.reveal.image);
+                        setEditingReveal(false);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </>
             )}
-            <p className="muted">
-              {activeGeneration
-                ? "Available when all generation requests have ended."
-                : "Corrections are saved separately. Earlier evaluation evidence remains intact."}
-            </p>
-            <button
-              disabled={busy || activeGeneration || !description.trim()}
-              onClick={saveReveal}
-            >
-              {detail.reveal ? "Save target correction" : "Save target reveal"}
-            </button>
           </section>
           <section className="panel form">
             <h2>Evaluate responses</h2>

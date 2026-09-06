@@ -206,7 +206,7 @@ export function buildApp(
         `UPDATE jobs
          SET attempt=attempt+1,status='queued',payload=?,response=NULL,result=NULL,error=NULL,
              trace_id=NULL,trace_url=NULL,trace_error=NULL,
-             created_at=CURRENT_TIMESTAMP,finished_at=NULL
+             created_at=CURRENT_TIMESTAMP,started_at=NULL,finished_at=NULL
          WHERE id=? AND status=?`,
       )
       .run(
@@ -243,7 +243,9 @@ export function buildApp(
   async function execute(j: any) {
     const controller = new AbortController();
     controllers.set(j.id, controller);
-    db.prepare("UPDATE jobs SET status='running' WHERE id=?").run(j.id);
+    db.prepare(
+      "UPDATE jobs SET status='running',started_at=CURRENT_TIMESTAMP WHERE id=?",
+    ).run(j.id);
     try {
       const r = run(j.run_id);
       const batch = j.batch_id

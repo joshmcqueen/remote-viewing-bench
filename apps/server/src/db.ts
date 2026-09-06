@@ -42,6 +42,14 @@ export function openDb(path: string) {
         insertScope.run(scope.name, scope.description);
       seedPrompts(db);
     })();
+  if (!db.prepare("SELECT 1 FROM migrations WHERE version=2").get())
+    db.transaction(() => {
+      db.exec(`
+ ALTER TABLE jobs ADD COLUMN started_at TEXT;
+ UPDATE jobs SET started_at=created_at WHERE status NOT IN ('queued','retrying');
+ INSERT INTO migrations VALUES(2);
+ `);
+    })();
   db.prepare(
     "UPDATE jobs SET status='interrupted',error='Server stopped before completion' WHERE status IN ('queued','running','retrying')",
   ).run();
