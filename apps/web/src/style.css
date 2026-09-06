@@ -43,6 +43,10 @@ button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
+.danger {
+  color: #9b4635;
+  border-color: #ead3cc;
+}
 a {
   color: var(--green);
 }
@@ -345,6 +349,15 @@ textarea {
   color: #344735;
   font-size: 12px;
 }
+.prompt-name-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.prompt-name-label small {
+  color: #6f8a62;
+  font-weight: 500;
+}
 textarea {
   resize: vertical;
   line-height: 1.7;
@@ -547,6 +560,40 @@ pre {
   display: block;
   margin-top: 6px;
   color: var(--muted);
+}
+.scope-manager {
+  margin: 25px 0 60px;
+}
+.scope-manager h2,
+.scope-manager p {
+  margin-top: 0;
+}
+.scope-list {
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.scope-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+.scope-item > div:first-child {
+  min-width: 0;
+}
+.scope-item small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.scope-editor {
+  max-width: 720px;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
 }
 .back {
   margin-top: 25px;

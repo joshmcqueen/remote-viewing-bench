@@ -64,9 +64,10 @@ async function fixture(
   };
   await call("/models/refresh", {});
   const ps = (await call("/prompts")).data;
+  const scopes = (await call("/scopes")).data;
   const input = {
     code: "RV-001",
-    scope: "physical",
+    scopeId: scopes.find((scope: any) => scope.name === "Physical object").id,
     promptVersionId: ps.find((p: any) => p.kind === "experiment").versionId,
     models: models.map((m) => m.id),
     repetitions: 1,
@@ -87,6 +88,7 @@ async function fixture(
     call,
     input,
     ps,
+    scopes,
     wait,
     close: async () => {
       await app.close();
@@ -94,6 +96,113 @@ async function fixture(
     },
   };
 }
+test("renaming prompts preserves versions and validates names", async () => {
+  const f = await fixture();
+  try {
+    const p = f.ps[0];
+    await f.call(`/prompts/${p.id}/versions`, {
+      ...p,
+      systemContent: "Second system version",
+      userContent: "Second user version",
+    });
+    const before = (await f.call("/prompts")).data;
+    const newVersion = before.find(
+      (version: any) => version.id === p.id && version.version === 2,
+    );
+    assert.equal(newVersion.systemContent, "Second system version");
+    assert.equal(newVersion.userContent, "Second user version");
+    const renamed = await f.call(
+      `/prompts/${p.id}`,
+      { name: "  Renamed prompt  " },
+      "PATCH",
+    );
+    assert.equal(renamed.status, 200);
+    const after = (await f.call("/prompts")).data;
+    assert.deepEqual(
+      after,
+      before.map((v: any) =>
+        v.id === p.id ? { ...v, name: "Renamed prompt" } : v,
+      ),
+    );
+    for (const name of [" ", "x".repeat(121)]) {
+      assert.equal(
+        (await f.call(`/prompts/${p.id}`, { name }, "PATCH")).status,
+        400,
+      );
+    }
+    assert.equal(
+      (await f.call("/prompts/999999", { name: "Missing" }, "PATCH")).status,
+      404,
+    );
+    await f.call(`/prompts/${p.id}/versions`, {
+      ...p,
+      name: "Renamed with version",
+    });
+    assert.ok(
+      (await f.call("/prompts")).data
+        .filter((v: any) => v.id === p.id)
+        .every((v: any) => v.name === "Renamed with version"),
+    );
+  } finally {
+    await f.close();
+  }
+});
+test("project scopes can be added, edited, renamed, and deleted", async () => {
+  const f = await fixture();
+  try {
+    assert.deepEqual(f.scopes.map((scope: any) => scope.name).sort(), [
+      "Physical object",
+      "Subject of a photograph",
+      "Text written on paper",
+    ]);
+    const created = await f.call("/scopes", {
+      name: "Sound recording",
+      description: "the sounds captured in a recording inside the envelope",
+    });
+    assert.equal(created.status, 200);
+    assert.equal(
+      (
+        await f.call("/scopes", {
+          name: "sound RECORDING",
+          description: "duplicate",
+        })
+      ).status,
+      400,
+    );
+    const changed = await f.call(
+      `/scopes/${created.data.id}`,
+      {
+        name: "Audio recording",
+        description: "the subject and qualities of an enclosed audio recording",
+      },
+      "PATCH",
+    );
+    assert.equal(changed.data.name, "Audio recording");
+
+    const runId = (
+      await f.call("/runs", {
+        ...f.input,
+        models: ["test/one"],
+        scopeId: created.data.id,
+      })
+    ).data.id;
+    await f.wait(runId);
+    await f.call(`/scopes/${created.data.id}`, undefined, "DELETE");
+    const run = (await f.call(`/runs/${runId}`)).data;
+    assert.equal(run.scope_id, null);
+    assert.equal(run.scope_name, "Audio recording");
+    assert.equal(
+      run.scope_description,
+      "the subject and qualities of an enclosed audio recording",
+    );
+    assert.equal(
+      (await f.call(`/scopes/${created.data.id}`, undefined, "DELETE")).status,
+      404,
+    );
+  } finally {
+    await f.close();
+  }
+});
 test("full experiment, immutable prompts, identical payloads, reveal and evaluation snapshots", async () => {
   const calls: any[] = [];
   const f = await fixture(async (p) => {
@@ -111,6 +220,14 @@ test("full experiment, immutable prompts, identical payloads, reveal and evaluat
     let r = await f.wait(id);
     assert.equal(r.jobs.length, 2);
     assert.deepEqual(calls[0].messages, calls[1].messages);
+    assert.equal(calls[0].messages[0].role, "system");
+    assert.ok(
+      calls[0].messages[0].content.includes("Record concise impressions"),
+    );
+    assert.deepEqual(calls[0].messages[1], {
+      role: "user",
+      content: "Your task is to remote view the target RV-001.",
+    });
     assert.equal(calls[0].tool_choice, "none");
     assert.deepEqual(calls[0].plugins, []);
     assert.equal(calls[0].tools, undefined);
@@ -119,7 +236,8 @@ test("full experiment, immutable prompts, identical payloads, reveal and evaluat
     await f.call(`/prompts/${p.id}/versions`, {
       name: p.name,
       kind: p.kind,
-      content: "New instructions",
+      systemContent: "New system instructions",
+      userContent: "New user instructions",
     });
     assert.equal(
       (await f.call(`/runs/${id}`)).data.messages[0].content,
@@ -146,9 +264,17 @@ test("full experiment, immutable prompts, identical payloads, reveal and evaluat
     };
     await f.call(`/runs/${id}/evaluate`, evaluation);
     r = await f.wait(id);
+    assert.equal(calls[2].messages[0].role, "system");
+    assert.equal(calls[2].messages[1].role, "user");
+    assert.ok(
+      calls[2].messages[0].content.includes("Return only the required JSON"),
+    );
     assert.equal(r.jobs.filter((j: any) => j.result?.score === 5).length, 2);
     assert.ok(
       calls[2].messages[1].content[0].text.includes("secret red marble"),
+    );
+    assert.ok(
+      calls[2].messages[1].content[0].text.includes("red round smooth"),
     );
     assert.ok(!calls[2].messages[1].content[0].text.includes("test/"));
     assert.equal(calls[2].messages[1].content[1].image_url.url, png);
@@ -254,7 +380,7 @@ test("restart marks queued and active work interrupted without modifying complet
   try {
     let db = openDb(join(dir, "bench.sqlite"));
     db.prepare(
-      "INSERT INTO runs(id,code,scope,messages,settings) VALUES(1,'x','physical','[]','{}')",
+      "INSERT INTO runs(id,code,scope_name,scope_description,messages,settings) VALUES(1,'x','Physical object','an object','[]','{}')",
     ).run();
     for (const status of ["queued", "running", "complete"])
       db.prepare(

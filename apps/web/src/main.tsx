@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  renderPrompt,
+  experimentMessages,
   eligibleModel,
   type Model,
   type Preferences,
@@ -30,10 +30,17 @@ const status = (s: string) => (
     {s}
   </span>
 );
+function generateTargetCode() {
+  const digits = Math.floor(Math.random() * 100_000_000)
+    .toString()
+    .padStart(8, "0");
+  return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+}
 function App() {
   const [view, setView] = useState("Runs"),
     [runs, setRuns] = useState<any[]>([]),
     [prompts, setPrompts] = useState<any[]>([]),
+    [scopes, setScopes] = useState<any[]>([]),
     [models, setModels] = useState<Model[]>([]),
     [config, setConfig] = useState<any>({}),
     [prefs, setPrefs] = useState<Preferences>({
@@ -48,25 +55,33 @@ function App() {
     [busy, setBusy] = useState(false),
     [detail, setDetail] = useState<any>(null),
     [search, setSearch] = useState("");
-  const [code, setCode] = useState(""),
-    [scope, setScope] = useState("physical"),
+  const [code, setCode] = useState(generateTargetCode),
+    [scopeId, setScopeId] = useState(0),
     [promptId, setPromptId] = useState(0);
   const [editing, setEditing] = useState<any>(null),
+    [editingScope, setEditingScope] = useState<any>(null),
     [description, setDescription] = useState(""),
     [image, setImage] = useState<string | null>(null),
     [evalPrompt, setEvalPrompt] = useState(0),
     [evalModel, setEvalModel] = useState("");
-  const [batch, setBatch] = useState<number | null>(null);
+  const [batch, setBatch] = useState<number | null>(null),
+    [promptNameStatus, setPromptNameStatus] = useState<{
+      id: number;
+      name: string;
+      state: "saving" | "saved";
+    } | null>(null);
   async function refresh() {
-    const [r, p, m, c, s] = await Promise.all([
+    const [r, p, q, m, c, s] = await Promise.all([
       api("/runs"),
       api("/prompts"),
+      api("/scopes"),
       api("/models"),
       api("/config"),
       api("/settings"),
     ]);
     setRuns(r);
     setPrompts(p);
+    setScopes(q);
     setModels(m.models);
     setConfig(c);
     setPrefs(s);
@@ -77,6 +92,19 @@ function App() {
     setEvalPrompt(
       (x) => x || p.find((x: any) => x.kind === "evaluator")?.versionId || 0,
     );
+    setScopeId((x) =>
+      q.some((scope: any) => scope.id === x) ? x : q[0]?.id || 0,
+    );
+  }
+  async function reloadScopes(preferredId?: number) {
+    const next = await api("/scopes");
+    setScopes(next);
+    setScopeId((current) => {
+      const wanted = preferredId ?? current;
+      return next.some((scope: any) => scope.id === wanted)
+        ? wanted
+        : next[0]?.id || 0;
+    });
   }
   useEffect(() => {
     refresh().catch((e) => setError(e.message));
@@ -123,9 +151,66 @@ function App() {
     await api("/settings", prefs, "PUT");
     setNotice("Preferences saved.");
   }
+  async function savePromptName(id: number, rawName: string) {
+    const original = prompts.find((prompt) => prompt.id === id)?.name || "";
+    const name = rawName.trim();
+    if (!name) {
+      setEditing((current: any) =>
+        current?.id === id ? { ...current, name: original } : current,
+      );
+      setPromptNameStatus(null);
+      setError("Prompt name cannot be empty.");
+      return;
+    }
+    if (name === original) {
+      setEditing((current: any) =>
+        current?.id === id ? { ...current, name } : current,
+      );
+      return;
+    }
+    setPromptNameStatus({ id, name, state: "saving" });
+    setError("");
+    try {
+      const renamed = await api(`/prompts/${id}`, { name }, "PATCH");
+      setPrompts((current) =>
+        current.map((prompt) =>
+          prompt.id === id ? { ...prompt, name: renamed.name } : prompt,
+        ),
+      );
+      setEditing((current: any) =>
+        current?.id === id && current.name.trim() === name
+          ? { ...current, name: renamed.name }
+          : current,
+      );
+      setPromptNameStatus((current) =>
+        current?.id === id && current.name === name
+          ? { ...current, state: "saved" }
+          : current,
+      );
+    } catch (e) {
+      setEditing((current: any) =>
+        current?.id === id && current.name.trim() === name
+          ? { ...current, name: original }
+          : current,
+      );
+      setPromptNameStatus((current) =>
+        current?.id === id && current.name === name ? null : current,
+      );
+      setError((e as Error).message);
+    }
+  }
   const experiments = prompts.filter((p) => p.kind === "experiment"),
     evaluators = prompts.filter((p) => p.kind === "evaluator");
   const selectedPrompt = prompts.find((p) => p.versionId === promptId);
+  const selectedScope = scopes.find((scope) => scope.id === scopeId);
+  const promptPreview = selectedPrompt
+    ? experimentMessages(
+        selectedPrompt.systemContent,
+        selectedPrompt.userContent,
+        code || "[target code]",
+        selectedScope?.description || "[project scope]",
+      )
+    : [];
   const generationJobs =
     detail?.jobs.filter((j: any) => j.kind === "generation") || [];
   const activeGeneration = generationJobs.some((j: any) =>
@@ -382,10 +467,7 @@ function App() {
                       <span>
                         <b>{r.code}</b>
                         <small>
-                          #{String(r.id).padStart(3, "0")} ·{" "}
-                          {r.scope === "physical"
-                            ? "Physical target"
-                            : "Depicted subject"}
+                          #{String(r.id).padStart(3, "0")} · {r.scope_name}
                         </small>
                       </span>
                       <span>
@@ -421,26 +503,43 @@ function App() {
                   <h2>
                     <em>01</em> Target & prompt
                   </h2>
-                  <label>
-                    Envelope code
+                  <label htmlFor="target-code">Target code</label>
+                  <div className="row">
                     <input
+                      id="target-code"
                       value={code}
                       onChange={(e) => setCode(e.target.value)}
-                      placeholder="e.g. RV-2026-001"
+                      placeholder="e.g. 4827-1936"
                     />
-                  </label>
-                  <label>
-                    Target scope
-                    <select
-                      value={scope}
-                      onChange={(e) => setScope(e.target.value)}
+                    <button
+                      type="button"
+                      onClick={() => setCode(generateTargetCode())}
                     >
-                      <option value="physical">Physical object or print</option>
-                      <option value="depicted">
-                        Subject depicted in a picture
-                      </option>
+                      {code ? "↻ Regenerate" : "Generate"}
+                    </button>
+                  </div>
+                  <p className="muted">
+                    A random code is pre-filled. Edit it or generate another.
+                  </p>
+                  <label>
+                    Project scope
+                    <select
+                      value={scopeId}
+                      onChange={(e) => setScopeId(Number(e.target.value))}
+                    >
+                      {!scopes.length && (
+                        <option value="">No scopes available</option>
+                      )}
+                      {scopes.map((scope) => (
+                        <option key={scope.id} value={scope.id}>
+                          {scope.name}
+                        </option>
+                      ))}
                     </select>
                   </label>
+                  {selectedScope && (
+                    <p className="muted">{selectedScope.description}</p>
+                  )}
                   <label>
                     Experiment prompt
                     <select
@@ -467,11 +566,12 @@ function App() {
                   <h2>Prompt preview</h2>
                   <pre className="preview">
                     {selectedPrompt
-                      ? renderPrompt(
-                          selectedPrompt.content,
-                          code || "[envelope code]",
-                          scope,
-                        )
+                      ? promptPreview
+                          .map(
+                            (message) =>
+                              `${message.role.toUpperCase()}\n${message.content}`,
+                          )
+                          .join("\n\n")
                       : "Create an experiment prompt first."}
                   </pre>
                   <div className="divider" />
@@ -542,15 +642,22 @@ function App() {
                   )}
                   <button
                     className="primary full"
-                    disabled={busy || !code || !prefs.models.length}
+                    disabled={
+                      busy ||
+                      !code ||
+                      !scopeId ||
+                      !promptId ||
+                      !prefs.models.length
+                    }
                     onClick={() =>
                       action(async () => {
                         const r = await api("/runs", {
                           ...prefs,
                           code,
-                          scope,
+                          scopeId,
                           promptVersionId: promptId,
                         });
+                        setCode(generateTargetCode());
                         await open(r.id);
                         setRuns(await api("/runs"));
                       })
@@ -571,13 +678,19 @@ function App() {
                 <h1>
                   Prompt library<span className="accent">.</span>
                 </h1>
-                <p>Versioned instructions. Reproducible experiments.</p>
+                <p>Versioned prompt pairs. Reproducible experiments.</p>
               </div>
               <button
                 className="primary"
-                onClick={() =>
-                  setEditing({ name: "", kind: "experiment", content: "" })
-                }
+                onClick={() => {
+                  setPromptNameStatus(null);
+                  setEditing({
+                    name: "",
+                    kind: "experiment",
+                    systemContent: "",
+                    userContent: "",
+                  });
+                }}
               >
                 ＋ New prompt
               </button>
@@ -592,7 +705,10 @@ function App() {
                       "prompt-item " +
                       (editing?.versionId === p.versionId ? "chosen" : "")
                     }
-                    onClick={() => setEditing({ ...p })}
+                    onClick={() => {
+                      setPromptNameStatus(null);
+                      setEditing({ ...p });
+                    }}
                   >
                     <div>
                       <b>{p.name}</b>
@@ -609,13 +725,46 @@ function App() {
                 {editing ? (
                   <>
                     <label>
-                      Name
+                      <span className="prompt-name-label">
+                        <span>Name</span>
+                        {editing.id && promptNameStatus?.id === editing.id && (
+                          <small role="status">
+                            {promptNameStatus?.state === "saving"
+                              ? "Saving…"
+                              : "Saved"}
+                          </small>
+                        )}
+                      </span>
                       <input
-                        disabled={!!editing.id}
                         value={editing.name}
-                        onChange={(e) =>
-                          setEditing({ ...editing, name: e.target.value })
-                        }
+                        maxLength={120}
+                        onChange={(e) => {
+                          setPromptNameStatus(null);
+                          setEditing({ ...editing, name: e.target.value });
+                        }}
+                        onBlur={(e) => {
+                          if (editing.id)
+                            void savePromptName(
+                              editing.id,
+                              e.currentTarget.value,
+                            );
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            e.currentTarget.blur();
+                          }
+                          if (e.key === "Escape" && editing.id) {
+                            e.preventDefault();
+                            const original =
+                              prompts.find((p) => p.id === editing.id)?.name ||
+                              "";
+                            e.currentTarget.value = original;
+                            setEditing({ ...editing, name: original });
+                            setPromptNameStatus(null);
+                            e.currentTarget.blur();
+                          }
+                        }}
                       />
                     </label>
                     <label>
@@ -632,19 +781,36 @@ function App() {
                       </select>
                     </label>
                     <label>
-                      Instructions
+                      System instructions
                       <textarea
-                        rows={17}
-                        value={editing.content}
+                        rows={12}
+                        value={editing.systemContent}
                         onChange={(e) =>
-                          setEditing({ ...editing, content: e.target.value })
+                          setEditing({
+                            ...editing,
+                            systemContent: e.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      User prompt
+                      <textarea
+                        rows={7}
+                        value={editing.userContent}
+                        onChange={(e) =>
+                          setEditing({
+                            ...editing,
+                            userContent: e.target.value,
+                          })
                         }
                       />
                     </label>
                     <p className="muted">
-                      Experiment variables: {"{{target_code}}"} and{" "}
-                      {"{{target_scope}}"}. Saving preserves every existing
-                      version.
+                      {editing.kind === "experiment"
+                        ? `Available in both messages: {{target_code}} and {{target_scope}}.`
+                        : `Available in the user prompt: {{target_scope}}, {{target_description}}, and {{response}}.`}{" "}
+                      Saving preserves every existing version.
                     </p>
                     <button
                       className="primary"
@@ -659,6 +825,7 @@ function App() {
                           );
                           setPrompts(await api("/prompts"));
                           setNotice("New prompt version saved.");
+                          setPromptNameStatus(null);
                           setEditing(null);
                         })
                       }
@@ -764,6 +931,135 @@ function App() {
                 </button>
               </section>
             </div>
+            <section className="panel form scope-manager">
+              <div className="row spread">
+                <div>
+                  <h2>Project scopes</h2>
+                  <p className="muted">
+                    One scope is selected for each remote-viewing envelope.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setEditingScope({ name: "", description: "" })}
+                >
+                  ＋ Add scope
+                </button>
+              </div>
+              <div className="scope-list">
+                {scopes.map((scope) => (
+                  <div className="scope-item" key={scope.id}>
+                    <div>
+                      <b>{scope.name}</b>
+                      <small>{scope.description}</small>
+                    </div>
+                    <div className="row">
+                      <button onClick={() => setEditingScope({ ...scope })}>
+                        Edit
+                      </button>
+                      <button
+                        className="danger"
+                        onClick={() => {
+                          if (
+                            !window.confirm(
+                              `Delete the “${scope.name}” scope? Historical runs will keep their saved scope.`,
+                            )
+                          )
+                            return;
+                          action(async () => {
+                            await api(
+                              `/scopes/${scope.id}`,
+                              undefined,
+                              "DELETE",
+                            );
+                            await reloadScopes();
+                            if (editingScope?.id === scope.id)
+                              setEditingScope(null);
+                            setNotice("Project scope deleted.");
+                          });
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {!scopes.length && (
+                  <p className="muted">Add a scope before creating a run.</p>
+                )}
+              </div>
+              {editingScope && (
+                <div className="scope-editor">
+                  <h3>{editingScope.id ? "Edit scope" : "New scope"}</h3>
+                  <label>
+                    Name
+                    <input
+                      maxLength={120}
+                      value={editingScope.name}
+                      onChange={(e) =>
+                        setEditingScope({
+                          ...editingScope,
+                          name: e.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Prompt description
+                    <textarea
+                      rows={4}
+                      maxLength={1000}
+                      value={editingScope.description}
+                      onChange={(e) =>
+                        setEditingScope({
+                          ...editingScope,
+                          description: e.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <p className="muted">
+                    This description replaces {"{{target_scope}}"} in experiment
+                    prompts.
+                  </p>
+                  <div className="row">
+                    <button
+                      className="primary"
+                      disabled={
+                        busy ||
+                        !editingScope.name.trim() ||
+                        !editingScope.description.trim()
+                      }
+                      onClick={() =>
+                        action(async () => {
+                          const saved = await api(
+                            editingScope.id
+                              ? `/scopes/${editingScope.id}`
+                              : "/scopes",
+                            {
+                              name: editingScope.name,
+                              description: editingScope.description,
+                            },
+                            editingScope.id ? "PATCH" : "POST",
+                          );
+                          await reloadScopes(saved.id);
+                          setEditingScope(null);
+                          setNotice(
+                            editingScope.id
+                              ? "Project scope updated."
+                              : "Project scope added.",
+                          );
+                        })
+                      }
+                    >
+                      {editingScope.id ? "Save changes" : "Add scope"}
+                    </button>
+                    <button onClick={() => setEditingScope(null)}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
           </>
         )}
         {view === "Runs" && detail && (
@@ -781,10 +1077,7 @@ function App() {
                   <span className="accent">.</span>
                 </h1>
                 <p>
-                  {detail.scope === "physical"
-                    ? "Physical object or print"
-                    : "Depicted subject"}{" "}
-                  · {date(detail.created_at)}
+                  {detail.scope_name} · {date(detail.created_at)}
                 </p>
               </div>
               <div className="row">
@@ -813,9 +1106,17 @@ function App() {
                   </h2>
                   <details>
                     <summary>
-                      Shared prompt · version #{detail.prompt_version_id}
+                      Shared messages · prompt version #
+                      {detail.prompt_version_id}
                     </summary>
-                    <pre>{detail.messages[0].content}</pre>
+                    <pre>
+                      {detail.messages
+                        .map(
+                          (message: any) =>
+                            `${message.role.toUpperCase()}\n${message.content}`,
+                        )
+                        .join("\n\n")}
+                    </pre>
                   </details>
                   {generationJobs.map((j: any) => (
                     <article className="job" key={j.id}>
