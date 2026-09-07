@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, download } from "../lib/api";
 import type { Feedback } from "./useFeedback";
 import type { Workspace } from "./useWorkspace";
 import { eligibleModel } from "@rv/shared";
@@ -67,6 +67,15 @@ export function useRuns(
       await api(`/runs/${detail.id}/cancel`, {});
       setDetail(await api(`/runs/${detail.id}`));
     });
+  const exportRun = (id: number, code: string) =>
+    action(async () => {
+      const safeCode = code.trim().replace(/[^A-Za-z0-9._-]+/g, "-") || "run";
+      await download(
+        `/runs/${id}/export`,
+        `remote-view-run-${safeCode}-${id}.json`,
+      );
+      setNotice(`Run ${code} exported.`);
+    });
   const deleteRun = (id: number, code: string) => {
     if (!window.confirm(`Delete run ${code}? This cannot be undone.`)) return;
     action(async () => {
@@ -128,6 +137,7 @@ export function useRuns(
     compatible,
     retry,
     cancelRun,
+    exportRun,
     deleteRun,
     saveReveal,
     evaluate,

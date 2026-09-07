@@ -154,6 +154,31 @@ export function buildApp(
             : null,
         }
       : null;
+  const exportReveal = (r: any) => {
+    const reveal = { ...r };
+    delete reveal.image;
+    return reveal;
+  };
+  const exportJob = (j: any) => {
+    const job = decodeJob(j);
+    if (!Array.isArray(job.payload?.messages)) return job;
+    return {
+      ...job,
+      payload: {
+        ...job.payload,
+        messages: job.payload.messages.map((message: any) => ({
+          ...message,
+          ...(Array.isArray(message.content)
+            ? {
+                content: message.content.filter(
+                  (part: any) => part?.type !== "image_url",
+                ),
+              }
+            : {}),
+        })),
+      },
+    };
+  };
   const withoutToolParameters = (payload: any) => {
     const clean = { ...payload };
     delete clean.tools;
@@ -600,6 +625,61 @@ export function buildApp(
       })),
     };
   });
+  app.get<{ Params: { id: string } }>(
+    "/api/runs/:id/export",
+    async (req, reply) => {
+      const id = Number(req.params.id);
+      const r = run(id);
+      if (hasActive(id))
+        throw Object.assign(
+          new Error("Wait for current work to finish before exporting"),
+          { statusCode: 409 },
+        );
+      const batches = all(
+        "SELECT * FROM batches WHERE run_id=? ORDER BY id",
+        id,
+      );
+      const promptVersions = all(
+        `SELECT v.*,p.name prompt_name,p.kind prompt_kind
+         FROM versions v
+         JOIN prompts p ON p.id=v.prompt_id
+         WHERE v.id IN (
+           SELECT prompt_version_id FROM runs WHERE id=?
+           UNION
+           SELECT prompt_version_id FROM batches WHERE run_id=?
+         )
+         ORDER BY v.id`,
+        id,
+        id,
+      );
+      const data = {
+        format: "remote-view-bench/run-export",
+        schema_version: 1,
+        exported_at: new Date().toISOString(),
+        run: summary(r),
+        prompt_versions: promptVersions,
+        reveals: all(
+          "SELECT * FROM reveals WHERE run_id=? ORDER BY id",
+          id,
+        ).map(exportReveal),
+        batches,
+        jobs: all("SELECT * FROM jobs WHERE run_id=? ORDER BY id", id).map(
+          exportJob,
+        ),
+      };
+      const safeCode =
+        String(r.code)
+          .trim()
+          .replace(/[^A-Za-z0-9._-]+/g, "-")
+          .replace(/^-+|-+$/g, "") || "run";
+      reply.header("Content-Type", "application/json; charset=utf-8");
+      reply.header(
+        "Content-Disposition",
+        `attachment; filename="remote-view-run-${safeCode}-${id}.json"`,
+      );
+      return reply.send(JSON.stringify(data, null, 2));
+    },
+  );
   app.delete<{ Params: { id: string } }>("/api/runs/:id", async (req) => {
     const id = Number(req.params.id);
     run(id);

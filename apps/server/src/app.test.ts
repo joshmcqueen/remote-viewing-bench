@@ -60,7 +60,7 @@ async function fixture(
       method: method || (body === undefined ? "GET" : "POST"),
       payload: body,
     });
-    return { status: r.statusCode, data: r.json() };
+    return { status: r.statusCode, data: r.json(), headers: r.headers };
   };
   await call("/models/refresh", {});
   const ps = (await call("/prompts")).data;
@@ -422,6 +422,98 @@ test("full experiment, immutable prompts, identical payloads, reveal and evaluat
     await f.close();
   }
 });
+test("inactive run export is a JSON attachment without embedded images", async () => {
+  const f = await fixture(async (p) => ({
+    response: {
+      ...response(
+        p.response_format ? JSON.stringify(score) : "red round smooth",
+      ),
+      usage: {
+        prompt_tokens: 12,
+        completion_tokens: 8,
+        total_tokens: 20,
+        cost: 0.001,
+      },
+    },
+    traceId: "trace-export",
+    traceUrl: "https://smith.langchain.com/trace-export",
+  }));
+  try {
+    const id = (
+      await f.call("/runs", {
+        ...f.input,
+        code: " RV / 001 ",
+        models: ["test/one"],
+      })
+    ).data.id;
+    await f.wait(id);
+    const evaluator = f.ps.find((p: any) => p.kind === "evaluator");
+    await f.call(`/runs/${id}/reveal`, {
+      description: "secret red marble",
+      image: png,
+    });
+    await f.call(`/runs/${id}/evaluate`, {
+      model: "test/one",
+      promptVersionId: evaluator.versionId,
+    });
+    await f.wait(id);
+    await f.call(`/runs/${id}/reveal`, {
+      description: "corrected blue marble",
+    });
+    await f.call(`/runs/${id}/evaluate`, {
+      model: "test/one",
+      promptVersionId: evaluator.versionId,
+    });
+    await f.wait(id);
+
+    const exported = await f.call(`/runs/${id}/export`);
+    assert.equal(exported.status, 200);
+    assert.match(
+      String(exported.headers["content-type"]),
+      /^application\/json/,
+    );
+    assert.equal(
+      exported.headers["content-disposition"],
+      `attachment; filename="remote-view-run-RV-001-${id}.json"`,
+    );
+    assert.equal(exported.data.format, "remote-view-bench/run-export");
+    assert.equal(exported.data.schema_version, 1);
+    assert.ok(!Number.isNaN(Date.parse(exported.data.exported_at)));
+    assert.equal(exported.data.run.id, id);
+    assert.equal(exported.data.run.status, "complete");
+    assert.equal(exported.data.run.messages[0].role, "system");
+    assert.equal(exported.data.prompt_versions.length, 2);
+    assert.deepEqual(
+      exported.data.prompt_versions.map((p: any) => p.prompt_kind).sort(),
+      ["evaluator", "experiment"],
+    );
+    assert.equal(exported.data.reveals.length, 2);
+    assert.ok(!("image" in exported.data.reveals[0]));
+    assert.equal(exported.data.reveals[0].mime, "image/png");
+    assert.ok(!("image" in exported.data.reveals[1]));
+    assert.equal(exported.data.batches.length, 2);
+    assert.equal(exported.data.jobs.length, 3);
+    const evaluation = exported.data.jobs.find(
+      (job: any) => job.kind === "evaluation",
+    );
+    assert.equal(evaluation.source_id, exported.data.jobs[0].id);
+    assert.equal(evaluation.result.score, 5);
+    assert.equal(evaluation.response.usage.total_tokens, 20);
+    assert.equal(evaluation.trace_id, "trace-export");
+    assert.equal(
+      evaluation.trace_url,
+      "https://smith.langchain.com/trace-export",
+    );
+    assert.deepEqual(
+      evaluation.payload.messages[1].content.map((part: any) => part.type),
+      ["text"],
+    );
+    assert.ok(!JSON.stringify(exported.data).includes("data:image/"));
+    assert.equal((await f.call("/runs/999999/export")).status, 404);
+  } finally {
+    await f.close();
+  }
+});
 test("partial failure and explicit retry replace the failed item; trace warnings preserve output", async () => {
   let fail = true;
   const f = await fixture(async (p) => {
@@ -462,6 +554,7 @@ test("active reveal blocked; cancellation prevents pending jobs from dispatching
   try {
     const id = (await f.call("/runs", { ...f.input, repetitions: 3 })).data.id;
     assert.equal(calls, 3);
+    assert.equal((await f.call(`/runs/${id}/export`)).status, 409);
     assert.equal(
       (await f.call(`/runs/${id}/reveal`, { description: "red" })).status,
       400,
@@ -469,6 +562,7 @@ test("active reveal blocked; cancellation prevents pending jobs from dispatching
     await f.call(`/runs/${id}/cancel`, {});
     const r = await f.wait(id);
     assert.ok(r.jobs.every((j: any) => j.status === "cancelled"));
+    assert.equal((await f.call(`/runs/${id}/export`)).status, 200);
     assert.equal(calls, 3);
     await f.call(`/runs/${id}/reveal`, { description: "red" });
     assert.equal((await f.call(`/jobs/${r.jobs[0].id}/retry`, {})).status, 400);

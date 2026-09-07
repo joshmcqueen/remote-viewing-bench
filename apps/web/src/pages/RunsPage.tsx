@@ -5,6 +5,7 @@ export function RunsPage({
   selectedModelCount,
   onNewRun,
   onOpen,
+  onExport,
   onDelete,
   busy,
 }: {
@@ -12,6 +13,7 @@ export function RunsPage({
   selectedModelCount: number;
   onNewRun: () => void;
   onOpen: (id: number) => void;
+  onExport: (id: number, code: string) => void;
   onDelete: (id: number, code: string) => void;
   busy: boolean;
 }) {
@@ -90,15 +92,28 @@ export function RunsPage({
                   <span>{date(r.created_at)}</span>
                   {<StatusBadge status={r.status} />}
                 </button>
-                <button
-                  className="run-delete danger"
-                  aria-label={`Delete run ${r.code}`}
-                  title="Delete run"
-                  disabled={busy}
-                  onClick={() => onDelete(r.id, r.code)}
-                >
-                  Delete
-                </button>
+                <div className="run-actions">
+                  {r.status !== "running" && (
+                    <button
+                      className="run-export"
+                      aria-label={`Export run ${r.code}`}
+                      title="Export run data"
+                      disabled={busy}
+                      onClick={() => onExport(r.id, r.code)}
+                    >
+                      Export
+                    </button>
+                  )}
+                  <button
+                    className="run-delete danger"
+                    aria-label={`Delete run ${r.code}`}
+                    title="Delete run"
+                    disabled={busy}
+                    onClick={() => onDelete(r.id, r.code)}
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             ))}
           </div>

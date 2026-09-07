@@ -50,6 +50,7 @@ export function RunDetailPage({ run, busy }: { run: Runs; busy: boolean }) {
     setEvalPrompt,
     evaluators,
     cancelRun,
+    exportRun,
     deleteRun,
     saveReveal,
     evaluate,
@@ -99,6 +100,14 @@ export function RunDetailPage({ run, busy }: { run: Runs; busy: boolean }) {
           {detail.status === "running" && (
             <button disabled={busy} onClick={cancelRun}>
               Cancel work
+            </button>
+          )}
+          {detail.status !== "running" && (
+            <button
+              disabled={busy}
+              onClick={() => exportRun(detail.id, detail.code)}
+            >
+              Export data
             </button>
           )}
           <button
