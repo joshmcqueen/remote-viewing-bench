@@ -8,7 +8,7 @@
     "build": "pnpm -r build",
     "start": "pnpm --filter server start",
     "nuke": "pnpm --filter @rv/shared build && pnpm --filter server nuke",
-    "test": "pnpm --filter @rv/shared build && pnpm --filter server test",
+    "test": "pnpm --filter @rv/shared build && pnpm --filter web test && pnpm --filter server test",
     "typecheck": "pnpm --filter @rv/shared build && pnpm -r typecheck",
     "format": "prettier --write apps packages *.json README.md"
   },

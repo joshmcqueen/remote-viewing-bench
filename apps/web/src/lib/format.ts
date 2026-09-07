@@ -32,9 +32,11 @@ export const formatDuration = (milliseconds: number) => {
 
 export const jobMetrics = (job: any, now = Date.now()) => {
   const usage = job.response?.usage;
-  const started = job.started_at || job.created_at;
+  const started = job.started_at;
   const startTime = started ? timestamp(started).getTime() : Number.NaN;
   const endTime = job.finished_at ? timestamp(job.finished_at).getTime() : now;
+  const waitingToStart =
+    !started && (job.status === "queued" || job.status === "retrying");
   return {
     inputTokens: finite(usage?.prompt_tokens) ? usage.prompt_tokens : null,
     outputTokens: finite(usage?.completion_tokens)
@@ -45,8 +47,9 @@ export const jobMetrics = (job: any, now = Date.now()) => {
       : null,
     totalTokens: finite(usage?.total_tokens) ? usage.total_tokens : null,
     cost: finite(usage?.cost) ? usage.cost : null,
-    elapsed:
-      Number.isFinite(startTime) && Number.isFinite(endTime)
+    elapsed: waitingToStart
+      ? 0
+      : Number.isFinite(startTime) && Number.isFinite(endTime)
         ? Math.max(0, endTime - startTime)
         : null,
   };
