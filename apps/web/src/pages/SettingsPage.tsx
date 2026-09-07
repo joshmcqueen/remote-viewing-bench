@@ -155,6 +155,26 @@ export function SettingsPage({
           </div>
           <div className="settings-section-body">
             <label className="settings-field compact-settings-field">
+              <span>Maximum concurrent LLM calls</span>
+              <input
+                type="number"
+                min="1"
+                max="20"
+                value={prefs.maxConcurrentCalls}
+                onChange={(e) =>
+                  setPrefs({
+                    ...prefs,
+                    maxConcurrentCalls: Number(e.target.value),
+                  })
+                }
+              />
+              <small>
+                Shared by generation, evaluation, and retry jobs. Higher values
+                may encounter provider rate limits.
+              </small>
+            </label>
+            <div className="divider" />
+            <label className="settings-field compact-settings-field">
               <span>Global output token limit</span>
               <input
                 type="number"
@@ -224,8 +244,9 @@ export function SettingsPage({
             </div>
             <div className="settings-actions">
               <p className="muted">
-                Saves model choices, evaluator, output limit, and retry
-                defaults. Runs keep their own historical generation snapshot.
+                Saves model choices, evaluator, concurrency, output limit, and
+                retry defaults. Runs keep their own historical generation
+                snapshot.
               </p>
               <button className="primary" disabled={busy} onClick={savePrefs}>
                 Save preferences

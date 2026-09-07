@@ -146,8 +146,9 @@ export function NewRunPage({
                 {prefs.models.length * prefs.repetitions} inference calls
               </strong>
               <span>
-                3 concurrent · {prefs.outputTokenLimit.toLocaleString()} token
-                global output limit · tools & browsing disabled
+                {prefs.maxConcurrentCalls} concurrent ·{" "}
+                {prefs.outputTokenLimit.toLocaleString()} token global output
+                limit · tools & browsing disabled
               </span>
             </div>
             {(!config.openrouter || (config.tracing && !config.langsmith)) && (

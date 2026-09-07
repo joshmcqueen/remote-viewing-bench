@@ -19,12 +19,35 @@ test("OpenRouter and SmithDB LangSmith integration records useful trace context 
         return new Response(
           JSON.stringify({
             id: "response-1",
+            model: "test/one",
             choices: [
               {
                 message: { role: "assistant", content: "red sphere" },
                 finish_reason: "stop",
               },
             ],
+            usage: {
+              prompt_tokens: 753,
+              completion_tokens: 1088,
+              total_tokens: 1841,
+              cost: 0.00464475,
+              prompt_tokens_details: {
+                cached_tokens: 10,
+                cache_write_tokens: 4,
+                audio_tokens: 2,
+                video_tokens: 1,
+              },
+              completion_tokens_details: {
+                reasoning_tokens: 435,
+                image_tokens: 3,
+                audio_tokens: 2,
+              },
+              cost_details: {
+                upstream_inference_cost: 0.00464475,
+                upstream_inference_prompt_cost: 0.00056475,
+                upstream_inference_completions_cost: 0.00408,
+              },
+            },
           }),
           { headers },
         );
@@ -74,6 +97,50 @@ test("OpenRouter and SmithDB LangSmith integration records useful trace context 
     assert.ok(traces.some((r) => r.body.includes("red sphere")));
     assert.ok(traces.some((r) => r.body.includes("RV-001 · Remote viewing")));
     assert.ok(traces.some((r) => r.body.includes('"target_id":"RV-001"')));
+    const completedTrace = traces.find(
+      (r) => r.method === "PATCH" && r.body.includes('"total_cost"'),
+    );
+    assert.ok(completedTrace);
+    const completedBody = JSON.parse(completedTrace.body);
+    assert.deepEqual(completedBody.extra.metadata.usage_metadata, {
+      input_tokens: 753,
+      output_tokens: 1088,
+      total_tokens: 1841,
+      input_token_details: {
+        cache_read: 10,
+        cache_creation: 4,
+        audio: 2,
+        video: 1,
+      },
+      output_token_details: { reasoning: 435, image: 3, audio: 2 },
+      input_cost: 0.00056475,
+      output_cost: 0.00408,
+      total_cost: 0.00464475,
+    });
+    assert.equal(completedBody.extra.metadata.ls_provider, "openrouter");
+    assert.equal(completedBody.extra.metadata.ls_model_name, "test/one");
+    assert.deepEqual(completedBody.outputs.usage, {
+      prompt_tokens: 753,
+      completion_tokens: 1088,
+      total_tokens: 1841,
+      cost: 0.00464475,
+      prompt_tokens_details: {
+        cached_tokens: 10,
+        cache_write_tokens: 4,
+        audio_tokens: 2,
+        video_tokens: 1,
+      },
+      completion_tokens_details: {
+        reasoning_tokens: 435,
+        image_tokens: 3,
+        audio_tokens: 2,
+      },
+      cost_details: {
+        upstream_inference_cost: 0.00464475,
+        upstream_inference_prompt_cost: 0.00056475,
+        upstream_inference_completions_cost: 0.00408,
+      },
+    });
     const urlRequest = requests.find((r) =>
       r.url.includes(`/api/v2/runs/${out.traceId}/url?`),
     );

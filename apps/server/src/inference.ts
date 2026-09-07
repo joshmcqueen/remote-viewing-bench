@@ -1,6 +1,72 @@
 import OpenAI from "openai";
 import { Client } from "langsmith";
 import { randomUUID } from "node:crypto";
+
+const finiteNumber = (value: unknown) =>
+  typeof value === "number" && Number.isFinite(value) ? value : undefined;
+
+const numberDetails = (
+  source: unknown,
+  fields: Record<string, string>,
+): Record<string, number> | undefined => {
+  if (!source || typeof source !== "object") return undefined;
+  const details: Record<string, number> = {};
+  for (const [sourceField, langSmithField] of Object.entries(fields)) {
+    const value = finiteNumber(
+      (source as Record<string, unknown>)[sourceField],
+    );
+    if (value !== undefined) details[langSmithField] = value;
+  }
+  return Object.keys(details).length ? details : undefined;
+};
+
+const langSmithUsageMetadata = (response: unknown) => {
+  if (!response || typeof response !== "object") return undefined;
+  const usage = (response as Record<string, unknown>).usage;
+  if (!usage || typeof usage !== "object") return undefined;
+  const source = usage as Record<string, any>;
+  const metadata: Record<string, unknown> = {};
+
+  const inputTokens = finiteNumber(source.prompt_tokens);
+  const outputTokens = finiteNumber(source.completion_tokens);
+  const totalTokens = finiteNumber(source.total_tokens);
+  if (inputTokens !== undefined) metadata.input_tokens = inputTokens;
+  if (outputTokens !== undefined) metadata.output_tokens = outputTokens;
+  if (totalTokens !== undefined) metadata.total_tokens = totalTokens;
+
+  const inputTokenDetails = numberDetails(source.prompt_tokens_details, {
+    cached_tokens: "cache_read",
+    cache_write_tokens: "cache_creation",
+    audio_tokens: "audio",
+    video_tokens: "video",
+  });
+  const outputTokenDetails = numberDetails(source.completion_tokens_details, {
+    reasoning_tokens: "reasoning",
+    image_tokens: "image",
+    audio_tokens: "audio",
+  });
+  if (inputTokenDetails) metadata.input_token_details = inputTokenDetails;
+  if (outputTokenDetails) metadata.output_token_details = outputTokenDetails;
+
+  const inputCost = finiteNumber(
+    source.cost_details?.upstream_inference_prompt_cost,
+  );
+  const outputCost = finiteNumber(
+    source.cost_details?.upstream_inference_completions_cost,
+  );
+  const totalCost =
+    finiteNumber(source.cost) ??
+    finiteNumber(source.cost_details?.upstream_inference_cost) ??
+    (inputCost !== undefined && outputCost !== undefined
+      ? inputCost + outputCost
+      : undefined);
+  if (inputCost !== undefined) metadata.input_cost = inputCost;
+  if (outputCost !== undefined) metadata.output_cost = outputCost;
+  if (totalCost !== undefined) metadata.total_cost = totalCost;
+
+  return Object.keys(metadata).length ? metadata : undefined;
+};
+
 export type Inference = (
   payload: any,
   signal: AbortSignal,
@@ -68,6 +134,11 @@ export function createInference(
       typeof meta.target_id === "string" && meta.target_id.trim()
         ? meta.target_id.trim()
         : undefined;
+    const traceMetadata = {
+      ...meta,
+      ls_provider: "openrouter",
+      ls_model_name: payload.model,
+    };
     if (client)
       try {
         await client.createRun({
@@ -78,11 +149,7 @@ export function createInference(
           start_time: started,
           project_name: projectName,
           extra: {
-            metadata: {
-              ...meta,
-              ls_provider: "openrouter",
-              ls_model_name: payload.model,
-            },
+            metadata: traceMetadata,
           },
         });
       } catch (e) {
@@ -110,9 +177,16 @@ export function createInference(
     }
     if (client)
       try {
+        const usageMetadata = langSmithUsageMetadata(response);
         await client.updateRun(traceId, {
           outputs: response,
           end_time: Date.now(),
+          extra: {
+            metadata: {
+              ...traceMetadata,
+              ...(usageMetadata ? { usage_metadata: usageMetadata } : {}),
+            },
+          },
         });
         const url = await client.runs.getURL(traceId, {
           project_id: await getProjectId(),

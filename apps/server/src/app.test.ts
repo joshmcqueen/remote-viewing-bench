@@ -476,6 +476,33 @@ test("active reveal blocked; cancellation prevents pending jobs from dispatching
     await f.close();
   }
 });
+test("workspace concurrency setting controls queued inference dispatch", async () => {
+  let calls = 0;
+  const pending: Array<() => void> = [];
+  const f = await fixture(async (_p, signal) => {
+    calls++;
+    return await new Promise((resolve, reject) => {
+      pending.push(() => resolve({ response: response("red") }));
+      signal.addEventListener("abort", () => reject(new Error("Aborted")));
+    });
+  });
+  try {
+    const id = (await f.call("/runs", { ...f.input, repetitions: 3 })).data.id;
+    assert.equal(calls, 3);
+
+    await f.call("/settings", { maxConcurrentCalls: 5 }, "PUT");
+    assert.equal(calls, 5);
+
+    pending[0]();
+    for (let n = 0; n < 20 && calls < 6; n++)
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    assert.equal(calls, 6);
+
+    await f.call(`/runs/${id}/cancel`, {});
+  } finally {
+    await f.close();
+  }
+});
 test("invalid scoring can be replaced by a valid evaluator retry", async () => {
   let valid = false;
   const calls: any[] = [];
@@ -594,7 +621,8 @@ test("configuration missing blocks inference, settings persist, foreign origins 
   try {
     assert.equal((await f.call("/runs", f.input)).status, 400);
     assert.equal((await f.call("/runs")).status, 200);
-    assert.equal((await f.call("/settings")).data.outputTokenLimit, 5000);
+    assert.equal((await f.call("/settings")).data.outputTokenLimit, 10000);
+    assert.equal((await f.call("/settings")).data.maxConcurrentCalls, 3);
     const c = (await f.call("/config")).data;
     assert.deepEqual(Object.keys(c).sort(), [
       "langsmith",
@@ -607,6 +635,7 @@ test("configuration missing blocks inference, settings persist, foreign origins 
         models: ["test/one"],
         repetitions: 2,
         outputTokenLimit: 3000,
+        maxConcurrentCalls: 7,
         temperature: 0.5,
         evaluatorModel: "test/one",
       },
@@ -614,6 +643,7 @@ test("configuration missing blocks inference, settings persist, foreign origins 
     );
     assert.equal((await f.call("/settings")).data.repetitions, 2);
     assert.equal((await f.call("/settings")).data.outputTokenLimit, 3000);
+    assert.equal((await f.call("/settings")).data.maxConcurrentCalls, 7);
     assert.equal((await f.call("/settings")).data.autoRetry, true);
     assert.equal((await f.call("/settings")).data.autoRetryDelaySeconds, 10);
     const bad = await f.app.inject({

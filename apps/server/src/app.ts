@@ -320,7 +320,8 @@ export function buildApp(
   }
   function pump() {
     if (closing) return;
-    while (controllers.size < 3) {
+    const maxConcurrentCalls = workspaceSettings().maxConcurrentCalls;
+    while (controllers.size < maxConcurrentCalls) {
       const j = row(
         "SELECT * FROM jobs WHERE status='queued' ORDER BY id LIMIT 1",
       );
@@ -371,6 +372,7 @@ export function buildApp(
     db.prepare("INSERT OR REPLACE INTO settings VALUES(1,?)").run(
       JSON.stringify(s),
     );
+    pump();
     return s;
   });
   app.get("/api/models", async () => ({
@@ -553,6 +555,7 @@ export function buildApp(
               ...input,
               models,
               outputTokenLimit: globalSettings.outputTokenLimit,
+              maxConcurrentCalls: globalSettings.maxConcurrentCalls,
             }),
           ).lastInsertRowid,
       );
