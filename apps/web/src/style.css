@@ -1038,6 +1038,24 @@ pre {
   font-size: 23px;
   letter-spacing: -0.6px;
 }
+.about-origin-copy {
+  max-width: 920px;
+}
+.about-origin-copy p {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.7;
+}
+.about-origin-copy p:last-child {
+  margin-bottom: 0;
+}
+.about-source-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 9px;
+  align-items: baseline;
+}
 .about-steps {
   list-style: none;
   padding: 0;

@@ -1,6 +1,20 @@
 # Remote Viewing Bench
 
-A local, single-user workbench for versioned remote-viewing experiments. Node/TypeScript + Fastify, React/Vite, SQLite, OpenRouter inference, and LangSmith tracing.
+A local research workspace for testing a strange but tractable question: can a language model describe a target it has not been shown?
+
+Remote Viewing Bench runs, compares, and preserves versioned, blinded remote-viewing experiments with language models. It uses Node/TypeScript + Fastify, React/Vite, SQLite, OpenRouter inference, and LangSmith tracing.
+
+## Why this exists
+
+The project began with an anecdote from physicist Thomas Campbell. On [The Joe Rogan Experience](https://www.youtube.com/watch?v=v2oBLSDCZaY), Campbell described placing a wooden spoon inside a cardboard box and asking Alexa to identify it. According to his account, Alexa described the object, its material, and an unusual pattern of holes in its handle.
+
+It is a remarkable claim, and an anecdote is not evidence. But it points toward an experiment that can be repeated.
+
+Philosopher Jason Reza Jorjani discusses claims of machine remote viewing as part of a broader inquiry into consciousness, intelligence, anomalous experience, and the increasingly complex relationship between technology and the esoteric. The conversation that helped inspire this project is [Decoding the Occult Horizons](https://www.youtube.com/watch?v=Qr-upy40irs).
+
+Remote Viewing Bench was built in the space between those provocations and a healthy skepticism. The aim is not to make the strange sound certain. It is to make it testable.
+
+The app therefore keeps target evidence out of the initial prompt, records first impressions before the reveal, preserves misses and contradictions, and evaluates correspondence using a consistent rubric. Even an unusual match would not, by itself, demonstrate remote viewing, psi, or machine consciousness. It would identify a result worth reproducing under stronger controls.
 
 ## Start
 

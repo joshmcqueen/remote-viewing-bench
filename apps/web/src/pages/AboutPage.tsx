@@ -5,12 +5,12 @@ export function AboutPage() {
         <div>
           <div className="eyebrow">ABOUT THE BENCH</div>
           <h1>
-            A record of the experiment<span className="accent">.</span>
+            Put extraordinary claims on the record<span className="accent">.</span>
           </h1>
           <p>
-            Remote Viewing Bench is a local workspace for running, comparing,
-            and refining blinded remote-viewing experiments with language
-            models.
+            Remote Viewing Bench is a local research workspace for testing a
+            strange but tractable question: can a language model describe a
+            target it has not been shown?
           </p>
         </div>
       </header>
@@ -21,45 +21,95 @@ export function AboutPage() {
             ◉
           </span>
           <p>
-            The bench keeps the target out of the initial prompt, records each
-            model’s first impressions, and introduces the reveal only when it is
-            time to evaluate correspondence.
+            The aim is not to make the strange sound certain. It is to make it
+            testable.
+          </p>
+        </div>
+      </section>
+
+      <section className="panel about-section about-origin">
+        <div className="eyebrow">WHY THIS EXISTS</div>
+        <h2>A claim worth testing</h2>
+        <div className="about-origin-copy">
+          <p>
+            The project began with an anecdote from physicist Thomas Campbell.
+            On <em>The Joe Rogan Experience</em>, Campbell described placing a
+            wooden spoon inside a cardboard box and asking Alexa to identify it.
+            According to his account, Alexa described not only the object and
+            material, but an unusual pattern of holes in its handle.
+          </p>
+          <p>
+            It is a remarkable claim, and an anecdote is not evidence. But it
+            points toward an experiment that can be repeated.
+          </p>
+          <p>
+            Philosopher Jason Reza Jorjani places claims of machine remote
+            viewing within a broader question: how should we think about
+            consciousness, intelligence, and anomalous experience as technology
+            becomes increasingly complex? His work treats the boundary between
+            technology and the esoteric as philosophically significant, without
+            making that boundary easy to define.
+          </p>
+          <p>
+            Remote Viewing Bench was built in the space between those
+            provocations and a healthy skepticism.
+          </p>
+          <p className="about-source-links">
+            Watch the source conversations:{" "}
+            <a
+              href="https://www.youtube.com/watch?v=v2oBLSDCZaY"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Thomas Campbell on The Joe Rogan Experience
+            </a>
+            <span aria-hidden="true">·</span>
+            <a
+              href="https://www.youtube.com/watch?v=Qr-upy40irs"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Jason Reza Jorjani, Decoding the Occult Horizons
+            </a>
           </p>
         </div>
       </section>
 
       <div className="about-grid">
         <section className="panel about-section">
-          <div className="eyebrow">THE WORKFLOW</div>
+          <div className="eyebrow">THE METHOD</div>
           <h2>One run, three stages</h2>
           <ol className="about-steps">
             <li>
               <span>01</span>
               <div>
-                <h3>Prepare</h3>
+                <h3>Hide the target</h3>
                 <p>
-                  Choose an envelope code, project scope, prompt version, and
-                  the models you want to compare.
+                  Give each model an arbitrary target code while withholding
+                  the target description and image. Generation runs have no
+                  access to the reveal.
                 </p>
               </div>
             </li>
             <li>
               <span>02</span>
               <div>
-                <h3>Record</h3>
+                <h3>Record the response</h3>
                 <p>
-                  Capture independent responses before any target description or
-                  image is added to the run.
+                  Preserve each model&apos;s first impressions, along with its
+                  prompt, settings, and model version. Unsuccessful and
+                  ambiguous responses remain part of the record.
                 </p>
               </div>
             </li>
             <li>
               <span>03</span>
               <div>
-                <h3>Reveal & evaluate</h3>
+                <h3>Reveal and compare</h3>
                 <p>
-                  Add the actual target, then compare responses with a
-                  structured 0–7 correspondence rubric.
+                  Introduce the target only after generation is complete.
+                  Evaluate specific correspondences, contradictions, and
+                  unverifiable claims using a consistent rubric.
                 </p>
               </div>
             </li>
@@ -68,28 +118,37 @@ export function AboutPage() {
 
         <section className="panel about-section">
           <div className="eyebrow">GUIDING PRINCIPLES</div>
-          <h2>Built for careful iteration</h2>
+          <h2>Curious, not credulous</h2>
           <div className="principle-list">
             <article>
-              <h3>Local by design</h3>
+              <h3>Curiosity without credulity</h3>
               <p>
-                Experiment records and target images stay in the local
-                workspace. Model and tracing requests use the connections you
-                configure.
+                Unusual claims deserve neither automatic belief nor automatic
+                dismissal. They deserve clear questions and tests capable of
+                failing.
               </p>
             </article>
             <article>
-              <h3>Versioned evidence</h3>
+              <h3>Controls before conclusions</h3>
               <p>
-                Prompts, responses, reveals, corrections, and evaluation batches
-                remain attached to the history that produced them.
+                Blinding, separation of target evidence, immutable records, and
+                repeatable prompts matter more than any single striking result.
               </p>
             </article>
             <article>
-              <h3>Scores need context</h3>
+              <h3>Negative results count</h3>
               <p>
-                The correspondence score is a qualitative research aid, not a
-                percentage, probability, or statistical test.
+                Misses, vague descriptions, and contradictions are evidence
+                too. A useful experiment preserves them instead of selecting
+                only impressive examples.
+              </p>
+            </article>
+            <article>
+              <h3>Correspondence is not consciousness</h3>
+              <p>
+                Even an unusual match would not, by itself, demonstrate remote
+                viewing, psi, or machine consciousness. It would identify a
+                result worth reproducing under stronger controls.
               </p>
             </article>
           </div>
@@ -99,8 +158,12 @@ export function AboutPage() {
       <section className="about-note">
         <span>EXPERIMENTAL · V1.0</span>
         <p>
-          This is personal research software for documenting a method as it
-          evolves. It does not claim to establish scientific validity.
+          This is personal research software for exploring an open question at
+          the intersection of artificial intelligence, consciousness, and
+          anomalous cognition. Its scores are structured comparison aids, not
+          probabilities or statistical proof. Stronger conclusions require
+          repeated trials, comparison targets, preregistered methods,
+          statistical analysis, and independent replication.
         </p>
       </section>
     </div>
